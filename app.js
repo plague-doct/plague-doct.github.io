@@ -55,7 +55,7 @@ const TEXT_SIGNALS = [
 const CAT_WEIGHTS = { gore:1.4, demonic:1.3, slasher:1.2, supernatural:1.1, creature:1.0, occult:1.0, psychological:0.9, tension:0.7 };
 const CAT_LABELS  = { gore:'Gore', supernatural:'Supernatural', psychological:'Psychological', slasher:'Slasher', demonic:'Demonic', creature:'Creature / Monster', tension:'Tension', occult:'Occult' };
 
-function calcScare(movie, keywords = [], rtScore = null) {
+function calcScare(movie, keywords = [], rtScore = null, rebertScore = null) {
   const cats = { gore:0, supernatural:0, psychological:0, slasher:0, demonic:0, creature:0, tension:0, occult:0 };
 
   for (const kw of keywords) {
@@ -83,20 +83,16 @@ function calcScare(movie, keywords = [], rtScore = null) {
   const va = movie.vote_average || 5;
   cats.tension = Math.min(cats.tension + (va>7?1:va>6?0.5:0), 10);
 
-  // RT signal: a high critics score on a horror film means it's effectively scary
-  if (rtScore !== null) {
-    const rtBonus = (rtScore / 100) * 1.5;
-    cats.tension = Math.min(cats.tension + rtBonus, 10);
-  }
-
-  const isHorror = (movie.genres||[]).some(g=>g.id===HORROR_ID) || (movie.genre_ids||[]).includes(HORROR_ID);
-
-  // Sum weighted contributions then map to 1-5
-  // rawScore of ~15 = max scary; 0 = no signals
+  // Sum category contributions
   let rawScore = 0;
   for (const [cat, val] of Object.entries(cats)) {
     rawScore += val * (CAT_WEIGHTS[cat] || 1);
   }
+
+  // External critic scores: a well-reviewed horror film earns extra weight
+  // RT 100% = +3.0, Ebert 4/4 = +2.0 added directly to rawScore
+  if (rtScore !== null)     rawScore += (rtScore / 100) * 3;
+  if (rebertScore !== null) rawScore += (rebertScore / 4) * 2;
 
   let score = 1 + (rawScore / 15) * 4;
   score = Math.max(1, Math.min(5, Math.round(score)));
@@ -235,6 +231,10 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore)
     ? `<div class="stat-card"><div class="stat-value" style="color:#f5c518">${rebertScore}/4</div><div class="stat-name">✌ Roger Ebert</div></div>`
     : `<div class="stat-card" id="rebertPlaceholder"><div class="stat-value" style="color:var(--text-muted)">—</div><div class="stat-name">✌ Roger Ebert</div></div>`;
 
+  const criticsNote = (rtScore !== null || rebertScore !== null)
+    ? `<p class="critics-note">Scare score includes critic data — score may update as reviews load.</p>`
+    : `<p class="critics-note">Fetching critic reviews… score will update shortly.</p>`;
+
   return `
     <div class="detail-layout">
       <div>
@@ -281,6 +281,7 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore)
           <span class="source-badge">🍅 Rotten Tomatoes</span>
           <span class="source-badge">✌ Roger Ebert</span>
         </div>
+        ${criticsNote}
 
         <div class="scare-breakdown">
           <h3>Scare breakdown</h3>
@@ -366,7 +367,6 @@ function renderCompare() {
   // render chart
   if (compareList.length > 1) {
     chart.classList.remove('hidden');
-    const maxScore = Math.max(...compareList.map(e=>e.breakdown.score));
     const rows = compareList
       .slice().sort((a,b)=>b.breakdown.score-a.breakdown.score)
       .map(({ movie, breakdown }) => {
@@ -383,7 +383,6 @@ function renderCompare() {
 
     chart.innerHTML = `<h3>Scare Ranking</h3>${rows}`;
 
-    // animate
     requestAnimationFrame(()=>{
       chart.querySelectorAll('.chart-fill').forEach(el=>{
         const w = el.style.width; el.style.width='0';
@@ -444,23 +443,21 @@ async function openMovie(id, backTarget='homeSection') {
 
   try {
     const { movie, credits, keywords } = await getDetails(id);
-    const breakdown = calcScare(movie, keywords, null);
+    const breakdown = calcScare(movie, keywords, null, null);
     content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null, null);
     animateBars();
 
-    // Fetch RT and Roger Ebert in background
+    // Fetch RT + Roger Ebert in parallel; recalculate scare score when both arrive
     const year = (movie.release_date||'').slice(0,4);
-    fetchRt(movie.title, year).then(rtScore => {
-      if (rtScore === null) return;
-      const placeholder = document.getElementById('rtPlaceholder');
-      if (!placeholder) return;
-      placeholder.outerHTML = `<div class="stat-card"><div class="stat-value" style="color:${rtScore>=60?'#f39c12':'#888899'}">${rtScore}%</div><div class="stat-name">🍅 Tomatometer</div></div>`;
-    });
-    fetchRogerEbert(movie.title, year).then(rebertScore => {
-      if (rebertScore === null) return;
-      const placeholder = document.getElementById('rebertPlaceholder');
-      if (!placeholder) return;
-      placeholder.outerHTML = `<div class="stat-card"><div class="stat-value" style="color:#f5c518">${rebertScore}/4</div><div class="stat-name">✌ Roger Ebert</div></div>`;
+    Promise.all([
+      fetchRt(movie.title, year),
+      fetchRogerEbert(movie.title, year),
+    ]).then(([rtScore, rebertScore]) => {
+      if (rtScore === null && rebertScore === null) return;
+      if (!document.getElementById('detailContent')) return;
+      const updated = calcScare(movie, keywords, rtScore, rebertScore);
+      content.innerHTML = renderDetail(movie, credits, keywords, updated, rtScore, rebertScore);
+      animateBars();
     });
 
   } catch (e) {
@@ -494,7 +491,7 @@ async function doSearch(query) {
     const movies = await searchMovies(query);
     currentResults = movies;
     if (!movies.length) {
-      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No films found.</p>';
+      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No horror films found.</p>';
       return;
     }
     grid.innerHTML = movies.map(m=>{ const { score, cats } = calcScare(m); return renderCard(m, score, cats.gore); }).join('');
@@ -519,16 +516,19 @@ async function addFilmToCompare(id, movieSnippet) {
 
   try {
     const { movie, keywords } = await getDetails(id);
-    const breakdown = calcScare(movie, keywords, null);
+    const breakdown = calcScare(movie, keywords, null, null);
     addToCompare(movie, breakdown);
 
-    // fetch RT and update breakdown score in background
+    // fetch RT + Ebert in background; recalculate with both
     const year = (movie.release_date||'').slice(0,4);
-    fetchRt(movie.title, year).then(rtScore => {
-      if (rtScore === null) return;
+    Promise.all([
+      fetchRt(movie.title, year),
+      fetchRogerEbert(movie.title, year),
+    ]).then(([rtScore, rebertScore]) => {
+      if (rtScore === null && rebertScore === null) return;
       const entry = compareList.find(e=>e.movie.id===id);
       if (!entry) return;
-      entry.breakdown = calcScare(movie, keywords, rtScore);
+      entry.breakdown = calcScare(movie, keywords, rtScore, rebertScore);
       renderCompare();
     });
   } catch(e) {
