@@ -16,45 +16,67 @@
       <span class="skull">☠</span>
       <h1>ScareFactory</h1>
     </div>
-    <p class="tagline">How scary is it, really?</p>
   </header>
 
   <main>
-    <section class="search-section">
-      <div class="search-bar">
-        <input
-          type="text"
-          id="searchInput"
-          placeholder="Search for a horror film..."
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <button id="searchBtn">Search</button>
+
+    <!-- ── Home ── -->
+    <section id="homeSection" class="home-section">
+      <div class="home-search-wrap">
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="Search a horror film..." autocomplete="off" spellcheck="false" />
+          <button id="searchBtn">Search</button>
+        </div>
+        <div id="suggestions" class="suggestions hidden"></div>
+        <p class="hunt-tagline">hunt if you dare</p>
+        <button class="compare-launch-btn" id="compareLaunchBtn">⚔ Compare Films</button>
       </div>
-      <div id="suggestions" class="suggestions hidden"></div>
     </section>
 
+    <!-- ── Search Results ── -->
     <section id="resultsSection" class="results-section hidden">
+      <div class="section-header">
+        <button class="back-btn" id="resultsBackBtn">← Back</button>
+        <h2 class="section-title" id="resultsTitle">Results</h2>
+      </div>
       <div id="results" class="results-grid"></div>
     </section>
 
+    <!-- ── Movie Detail ── -->
     <section id="movieDetail" class="movie-detail hidden">
-      <button class="back-btn" id="backBtn">← Back to results</button>
+      <button class="back-btn" id="backBtn">← Back</button>
       <div id="detailContent"></div>
     </section>
 
-    <section class="trending-section" id="trendingSection">
-      <h2>Trending Horror</h2>
-      <div id="trendingGrid" class="results-grid"></div>
+    <!-- ── Compare ── -->
+    <section id="compareSection" class="compare-section hidden">
+      <div class="section-header">
+        <button class="back-btn" id="compareBackBtn">← Back</button>
+        <h2 class="section-title">Compare Films</h2>
+      </div>
+
+      <div class="compare-search-row">
+        <div class="compare-search-wrap">
+          <input type="text" id="compareSearchInput" placeholder="Add a film to compare..." autocomplete="off" spellcheck="false" />
+          <button id="compareSearchBtn">Add</button>
+        </div>
+        <div id="compareSuggestions" class="suggestions hidden"></div>
+      </div>
+
+      <div id="compareSlots" class="compare-slots">
+        <div class="compare-empty-hint">Search above to add films — up to 4 at once</div>
+      </div>
+
+      <div id="compareChart" class="compare-chart hidden"></div>
     </section>
+
   </main>
 
   <footer>
-    <p>Data provided by <a href="https://www.themoviedb.org" target="_blank">TMDB</a>. Scare scores are calculated, not official ratings.</p>
+    <p>Data by <a href="https://www.themoviedb.org" target="_blank">TMDB</a>. Scare scores are calculated, not official ratings.</p>
   </footer>
 
   <div id="toast" class="toast hidden"></div>
-
   <script src="app.js"></script>
 </body>
 </html>
