@@ -149,9 +149,9 @@ async function fetchRogerEbert(title, year) {
       .replace(/^-|-$/g, '');
     const html = await corsProxy(`https://www.rogerebert.com/reviews/${slug}-${year}`);
     if (!html) return null;
-    const m = html.match(/"ratingValue"\s*:\s*"?([0-4](?:\.[05])?)"/ ||
+    const m = html.match(/"ratingValue"\s*:\s*"?([0-4](?:\.[05])?)"/) ||
               html.match(/data-rating="([0-4](?:\.[05])?)"/) ||
-              html.match(/class="[^"]*stars?-([0-9]+(?:-[05])?)"/ );
+              html.match(/class="[^"]*stars?-([0-9]+(?:-[05])?)"/ );
     if (!m) return null;
     return parseFloat(m[1].replace('-', '.'));
   } catch { return null; }
