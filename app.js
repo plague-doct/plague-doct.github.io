@@ -89,33 +89,31 @@ function calcScare(movie, keywords = [], rtScore = null) {
     cats.tension = Math.min(cats.tension + rtBonus, 10);
   }
 
-  let weighted = 0, maxPossible = 0;
+  const isHorror = (movie.genres||[]).some(g=>g.id===HORROR_ID) || (movie.genre_ids||[]).includes(HORROR_ID);
+
+  // Sum weighted contributions then map to 1-5
+  // rawScore of ~15 = max scary; 0 = no signals
+  let rawScore = 0;
   for (const [cat, val] of Object.entries(cats)) {
-    weighted    += val * (CAT_WEIGHTS[cat] || 1);
-    maxPossible += 10  * (CAT_WEIGHTS[cat] || 1);
+    rawScore += val * (CAT_WEIGHTS[cat] || 1);
   }
 
-  let score = (weighted / maxPossible) * 10;
-  const isHorror = (movie.genres||[]).some(g=>g.id===HORROR_ID) || (movie.genre_ids||[]).includes(HORROR_ID);
-  if (isHorror && score < 2) score = 2;
-  score = Math.max(1, Math.min(10, Math.round(score * 10) / 10));
+  let score = 1 + (rawScore / 15) * 4;
+  score = Math.max(1, Math.min(5, Math.round(score)));
   return { score, cats };
 }
 
 const DESCRIPTORS = [
-  { max:1.9,  label:'Barely a chill', icon:'🥱', color:'#27ae60' },
-  { max:3.4,  label:'Mildly spooky',  icon:'🙂', color:'#2ecc71' },
-  { max:4.9,  label:'Unsettling',     icon:'😐', color:'#f1c40f' },
-  { max:5.9,  label:'Creepy',         icon:'😟', color:'#f39c12' },
-  { max:6.9,  label:'Frightening',    icon:'😨', color:'#e67e22' },
-  { max:7.9,  label:'Terrifying',     icon:'😱', color:'#e74c3c' },
-  { max:8.9,  label:'Nightmare fuel', icon:'😰', color:'#c0392b' },
-  { max:10,   label:'Pure horror',    icon:'💀', color:'#8e44ad' },
+  { max:1, label:'Not that Scary',      icon:'😴', color:'#27ae60' },
+  { max:2, label:'Bit Spooky',          icon:'🙂', color:'#c87800' },
+  { max:3, label:'In for a good scare', icon:'😨', color:'#e67e22' },
+  { max:4, label:'Tough as nails',      icon:'😱', color:'#c00000' },
+  { max:5, label:'Nightmare fuel',      icon:'💀', color:'#8e44ad' },
 ];
 
 function descriptor(score) { return DESCRIPTORS.find(d=>score<=d.max)||DESCRIPTORS[DESCRIPTORS.length-1]; }
-function scareClass(score) { return `scare-${Math.round(Math.max(1,Math.min(10,score)))}`; }
-function scareIcons(score) { return '💀'.repeat(Math.max(0,Math.round(score/2))); }
+function scareClass(score) { return `scare-${Math.max(1,Math.min(5,Math.round(score)))}`; }
+function scareIcons(score) { return '💀'.repeat(Math.max(0,Math.round(score))); }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
@@ -177,7 +175,7 @@ function renderCard(movie, score) {
       <div class="card-info">
         <div class="card-title">${esc(movie.title)}</div>
         ${year ? `<div class="card-year">${year}</div>` : ''}
-        <span class="scare-badge ${scareClass(score)}">${desc.icon} ${score}/10</span>
+        <span class="scare-badge ${scareClass(score)}">${desc.icon} ${score}/5</span>
       </div>
     </div>`;
 }
@@ -216,7 +214,7 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore) {
           <div class="scare-score" style="color:${desc.color}">${score}</div>
           <div class="scare-descriptor" style="color:${desc.color}">${desc.icon} ${desc.label}</div>
           <div class="scare-bar-track">
-            <div class="scare-bar-fill" style="width:${(score/10)*100}%;background:linear-gradient(90deg,${desc.color}aa,${desc.color})"></div>
+            <div class="scare-bar-fill" style="width:${(score/5)*100}%;background:linear-gradient(90deg,${desc.color}aa,${desc.color})"></div>
           </div>
           <div class="scare-icons">${scareIcons(score)}</div>
         </div>
@@ -235,7 +233,7 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore) {
 
         <div class="stats-row" id="statsRow">
           <div class="stat-card">
-            <div class="stat-value" style="color:${desc.color}">${score}</div>
+            <div class="stat-value" style="color:${desc.color}">${score}/5</div>
             <div class="stat-name">Scare Score</div>
           </div>
           <div class="stat-card">
@@ -336,7 +334,7 @@ function renderCompare() {
       .map(({ movie, breakdown }) => {
         const { score } = breakdown;
         const desc = descriptor(score);
-        const pct  = (score / 10) * 100;
+        const pct  = (score / 5) * 100;
         return `
           <div class="chart-row">
             <span class="chart-label" title="${esc(movie.title)}">${esc(movie.title)}</span>
@@ -505,9 +503,54 @@ function showToast(msg) {
   t._timer = setTimeout(()=>t.classList.add('hidden'), 2500);
 }
 
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
+async function loadSidebar() {
+  const list = document.getElementById('sidebarList');
+  try {
+    const data = await tmdb('/discover/movie', {
+      with_genres: HORROR_ID,
+      sort_by: 'popularity.desc',
+      'vote_count.gte': 100,
+      page: 1,
+    });
+    const movies = (data.results || []).slice(0, 12);
+    const scored = movies
+      .map(m => ({ m, score: calcScare(m).score }))
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8);
+
+    if (!scored.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
+
+    list.innerHTML = scored.map(({ m, score }) => {
+      const desc  = descriptor(score);
+      const thumb = posterUrl(m.poster_path, 'w92');
+      const year  = (m.release_date||'').slice(0,4);
+      return `
+        <div class="sidebar-item" data-id="${m.id}">
+          ${thumb
+            ? `<img class="sidebar-thumb" src="${thumb}" alt="" loading="lazy" />`
+            : `<div class="sidebar-no-thumb">🎬</div>`}
+          <div class="sidebar-info">
+            <div class="sidebar-name">${esc(m.title)}${year ? ` <span style="color:var(--text-muted);font-weight:400">(${year})</span>` : ''}</div>
+            <div class="sidebar-score" style="color:${desc.color}">${desc.icon} ${score}/5</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    list.querySelectorAll('.sidebar-item').forEach(el => {
+      el.addEventListener('click', () => openMovie(+el.dataset.id, 'homeSection'));
+    });
+  } catch {
+    list.innerHTML = '<div class="sidebar-loading">Unavailable</div>';
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  loadSidebar();
+
   // ── main search
   const searchInput = document.getElementById('searchInput');
   const searchBtn   = document.getElementById('searchBtn');
