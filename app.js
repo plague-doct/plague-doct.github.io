@@ -144,7 +144,7 @@ async function fetchRt(title, year) {
 
 async function searchMovies(query) {
   const d = await tmdb('/search/movie', { query, include_adult:false });
-  return d.results || [];
+  return (d.results || []).filter(m => (m.genre_ids||[]).includes(HORROR_ID));
 }
 
 async function getDetails(id) {
@@ -451,7 +451,7 @@ async function doSearch(query) {
     const movies = await searchMovies(query);
     currentResults = movies;
     if (!movies.length) {
-      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No films found.</p>';
+      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No horror films found.</p>';
       return;
     }
     grid.innerHTML = movies.map(m=>renderCard(m, calcScare(m).score)).join('');
@@ -608,7 +608,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!q) return;
     cSugg.classList.add('hidden');
     searchMovies(q).then(movies=>{
-      if (!movies.length) { showToast('No films found'); return; }
+      if (!movies.length) { showToast('No horror films found'); return; }
       bindSuggestions(cSugg, movies, (id,m)=>addFilmToCompare(id,m));
       cSugg.classList.remove('hidden');
     }).catch(()=>showToast('Search failed'));
