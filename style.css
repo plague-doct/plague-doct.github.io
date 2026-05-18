@@ -16,7 +16,6 @@
   --text:     #f0f0f0;
   --text-muted: #888888;
 
-  /* scare tier colours */
   --scare-low:     #2a8f2a;
   --scare-mid:     #c87800;
   --scare-high:    #c00000;
@@ -24,7 +23,6 @@
 
   --radius: 10px;
 
-  /* brand fonts */
   --font-logo:    'Permanent Marker', cursive;
   --font-heading: 'VT323', monospace;
   --font-body:    'Inter', sans-serif;
@@ -59,7 +57,6 @@ header {
   padding-bottom: 1.2rem;
 }
 
-/* placeholder skull — replaced by user's SVG asset */
 .skull-asset {
   height: 2.4rem;
   width: auto;
@@ -354,6 +351,37 @@ input::placeholder { color: var(--text-muted); }
 }
 
 .card-year { color: var(--text-muted); font-size: 0.72rem; margin-bottom: 0.45rem; }
+
+/* ── Gore meter (card) ── */
+.gore-meter {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.gore-label {
+  font-family: var(--font-heading);
+  font-size: 0.7rem;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  width: 30px;
+}
+
+.gore-track {
+  flex: 1;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.gore-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.5s ease;
+}
 
 /* ── Scare badge ── */
 .scare-badge {

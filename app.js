@@ -83,7 +83,6 @@ function calcScare(movie, keywords = [], rtScore = null) {
   const va = movie.vote_average || 5;
   cats.tension = Math.min(cats.tension + (va>7?1:va>6?0.5:0), 10);
 
-  // RT signal: a high critics score on a horror film means it's effectively scary
   if (rtScore !== null) {
     const rtBonus = (rtScore / 100) * 1.5;
     cats.tension = Math.min(cats.tension + rtBonus, 10);
@@ -91,8 +90,6 @@ function calcScare(movie, keywords = [], rtScore = null) {
 
   const isHorror = (movie.genres||[]).some(g=>g.id===HORROR_ID) || (movie.genre_ids||[]).includes(HORROR_ID);
 
-  // Sum weighted contributions then map to 1-5
-  // rawScore of ~15 = max scary; 0 = no signals
   let rawScore = 0;
   for (const [cat, val] of Object.entries(cats)) {
     rawScore += val * (CAT_WEIGHTS[cat] || 1);
@@ -164,10 +161,12 @@ function esc(str) {
   return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function renderCard(movie, score) {
-  const poster = posterUrl(movie.poster_path);
-  const year   = (movie.release_date||'').slice(0,4);
-  const desc   = descriptor(score);
+function renderCard(movie, score, gore) {
+  const poster   = posterUrl(movie.poster_path);
+  const year     = (movie.release_date||'').slice(0,4);
+  const desc     = descriptor(score);
+  const gorePct  = Math.round((gore / 10) * 100);
+  const goreColor = gore >= 7 ? '#c00000' : gore >= 4 ? '#e67e22' : '#555';
   return `
     <div class="movie-card" data-id="${movie.id}">
       ${poster ? `<img class="card-poster" src="${poster}" alt="${esc(movie.title)}" loading="lazy" />`
@@ -176,6 +175,10 @@ function renderCard(movie, score) {
         <div class="card-title">${esc(movie.title)}</div>
         ${year ? `<div class="card-year">${year}</div>` : ''}
         <span class="scare-badge ${scareClass(score)}">${desc.icon} ${score}/5</span>
+        <div class="gore-meter">
+          <span class="gore-label">GORE</span>
+          <div class="gore-track"><div class="gore-fill" style="width:${gorePct}%;background:${goreColor}"></div></div>
+        </div>
       </div>
     </div>`;
 }
@@ -320,12 +323,10 @@ function renderCompare() {
       </div>`;
   }).join('');
 
-  // bind remove buttons
   slots.querySelectorAll('.compare-remove').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); removeFromCompare(btn.dataset.id); });
   });
 
-  // render chart
   if (compareList.length > 1) {
     chart.classList.remove('hidden');
     const maxScore = Math.max(...compareList.map(e=>e.breakdown.score));
@@ -345,7 +346,6 @@ function renderCompare() {
 
     chart.innerHTML = `<h3>Scare Ranking</h3>${rows}`;
 
-    // animate
     requestAnimationFrame(()=>{
       chart.querySelectorAll('.chart-fill').forEach(el=>{
         const w = el.style.width; el.style.width='0';
@@ -410,7 +410,6 @@ async function openMovie(id, backTarget='homeSection') {
     content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null);
     animateBars();
 
-    // RT in background — update when ready
     const year = (movie.release_date||'').slice(0,4);
     fetchRt(movie.title, year).then(rtScore => {
       if (rtScore === null) return;
@@ -454,7 +453,7 @@ async function doSearch(query) {
       grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No horror films found.</p>';
       return;
     }
-    grid.innerHTML = movies.map(m=>renderCard(m, calcScare(m).score)).join('');
+    grid.innerHTML = movies.map(m=>{ const { score, cats } = calcScare(m); return renderCard(m, score, cats.gore); }).join('');
     grid.querySelectorAll('.movie-card').forEach(c=>{
       c.addEventListener('click',()=>openMovie(+c.dataset.id,'resultsSection'));
     });
@@ -479,7 +478,6 @@ async function addFilmToCompare(id, movieSnippet) {
     const breakdown = calcScare(movie, keywords, null);
     addToCompare(movie, breakdown);
 
-    // fetch RT and update breakdown score in background
     const year = (movie.release_date||'').slice(0,4);
     fetchRt(movie.title, year).then(rtScore => {
       if (rtScore === null) return;
@@ -551,7 +549,6 @@ async function loadSidebar() {
 document.addEventListener('DOMContentLoaded', () => {
   loadSidebar();
 
-  // ── main search
   const searchInput = document.getElementById('searchInput');
   const searchBtn   = document.getElementById('searchBtn');
   const suggestions = document.getElementById('suggestions');
@@ -574,31 +571,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 280);
   });
 
-  // ── results back
   document.getElementById('resultsBackBtn').addEventListener('click', ()=>{
     showSection('homeSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── detail back
   document.getElementById('backBtn').addEventListener('click', ()=>{
     showSection(detailBackTarget);
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── compare launch
   document.getElementById('compareLaunchBtn').addEventListener('click', ()=>{
     showSection('compareSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── compare back
   document.getElementById('compareBackBtn').addEventListener('click', ()=>{
     showSection('homeSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── compare search
   const cInput = document.getElementById('compareSearchInput');
   const cBtn   = document.getElementById('compareSearchBtn');
   const cSugg  = document.getElementById('compareSuggestions');
@@ -627,7 +619,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 280);
   });
 
-  // close suggestions on outside click
   document.addEventListener('click', e=>{
     if (!e.target.closest('.home-search-wrap'))  suggestions.classList.add('hidden');
     if (!e.target.closest('.compare-search-row')) cSugg.classList.add('hidden');
