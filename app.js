@@ -1,4 +1,4 @@
-// ── Config ─────────────────────────────────────────────────────────────────────────────
+// ── Config ───────────────────────────────────────────────────────────────────
 const TMDB_KEY   = 'f40d9966d6b39627111499fdb5a3e3e7';
 const TMDB_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmNDBkOTk2NmQ2YjM5NjI3MTExNDk5ZmRiNWEzZTNlNyIsIm5iZiI6MTc3ODQ2NjA3My4zMzYsInN1YiI6IjZhMDEzZDE5MjZmOTljODlkNjI0MTlmYiIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.hJJIPICzHtPXvMkXhMC69sMrW1U3x21nDT5fXnjX1CY';
 // Free OMDB key (get your own at https://www.omdbapi.com/apikey.aspx)
@@ -11,7 +11,7 @@ const HORROR_ID  = 27;
 
 const tmdbHeaders = { Authorization: `Bearer ${TMDB_TOKEN}` };
 
-// ── Scare engine ──────────────────────────────────────────────────────────────────
+// ── Scare engine ──────────────────────────────────────────────────────────────
 
 const KEYWORD_MAP = {
   10713:  { cat: 'gore',          weight: 2   },
@@ -117,7 +117,7 @@ function descriptor(score) { return DESCRIPTORS.find(d=>score<=d.max)||DESCRIPTO
 function scareClass(score) { return `scare-${Math.round(Math.max(1,Math.min(10,score)))}`; }
 function scareIcons(score) { return '💀'.repeat(Math.max(0,Math.round(score/2))); }
 
-// ── API helpers ─────────────────────────────────────────────────────────────────────
+// ── API helpers ───────────────────────────────────────────────────────────────
 
 async function tmdb(path, params={}) {
   const url = new URL(`${TMDB_BASE}${path}`);
@@ -158,7 +158,7 @@ async function getDetails(id) {
   return { movie, credits, keywords: kw.keywords||[] };
 }
 
-// ── Render helpers ──────────────────────────────────────────────────────────
+// ── Render helpers ────────────────────────────────────────────────────────────
 
 function posterUrl(path, size='w342') { return path ? `${IMG_BASE}/${size}${path}` : null; }
 
@@ -256,7 +256,7 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore) {
     </div>`;
 }
 
-// ── Compare state ─────────────────────────────────────────────────────────────────
+// ── Compare state ─────────────────────────────────────────────────────────────
 
 const compareList = []; // { movie, breakdown }
 const MAX_COMPARE = 4;
@@ -330,6 +330,7 @@ function renderCompare() {
   // render chart
   if (compareList.length > 1) {
     chart.classList.remove('hidden');
+    const maxScore = Math.max(...compareList.map(e=>e.breakdown.score));
     const rows = compareList
       .slice().sort((a,b)=>b.breakdown.score-a.breakdown.score)
       .map(({ movie, breakdown }) => {
@@ -346,6 +347,7 @@ function renderCompare() {
 
     chart.innerHTML = `<h3>Scare Ranking</h3>${rows}`;
 
+    // animate
     requestAnimationFrame(()=>{
       chart.querySelectorAll('.chart-fill').forEach(el=>{
         const w = el.style.width; el.style.width='0';
@@ -357,10 +359,10 @@ function renderCompare() {
   }
 }
 
-// ── Suggestions ────────────────────────────────────────────────────────────────────
+// ── Suggestions ───────────────────────────────────────────────────────────────
 
-function bindSuggestions(boxEl, movies, onSelect) {
-  boxEl.innerHTML = movies.slice(0,6).map(m=>{
+function buildSuggestions(movies, onSelect) {
+  return movies.slice(0,6).map(m=>{
     const thumb = posterUrl(m.poster_path,'w92');
     const year  = (m.release_date||'').slice(0,4);
     return `
@@ -372,6 +374,10 @@ function bindSuggestions(boxEl, movies, onSelect) {
         </div>
       </div>`;
   }).join('');
+}
+
+function bindSuggestions(boxEl, movies, onSelect) {
+  boxEl.innerHTML = buildSuggestions(movies);
   boxEl.classList.remove('hidden');
   boxEl.querySelectorAll('.suggestion-item').forEach(item=>{
     item.addEventListener('click', ()=>{
@@ -381,7 +387,7 @@ function bindSuggestions(boxEl, movies, onSelect) {
   });
 }
 
-// ── Sections ─────────────────────────────────────────────────────────────────────────
+// ── Sections ──────────────────────────────────────────────────────────────────
 
 const SECTIONS = ['homeSection','resultsSection','movieDetail','compareSection'];
 
@@ -389,7 +395,7 @@ function showSection(id) {
   SECTIONS.forEach(s=>document.getElementById(s).classList.toggle('hidden', s!==id));
 }
 
-// ── Detail view ───────────────────────────────────────────────────────────────────
+// ── Detail view ───────────────────────────────────────────────────────────────
 
 let detailBackTarget = 'homeSection';
 
@@ -412,6 +418,7 @@ async function openMovie(id, backTarget='homeSection') {
       if (rtScore === null) return;
       const placeholder = document.getElementById('rtPlaceholder');
       if (!placeholder) return;
+      const desc = descriptor(breakdown.score);
       placeholder.outerHTML = `<div class="stat-card"><div class="stat-value" style="color:${rtScore>=60?'#f39c12':'#888899'}">${rtScore}%</div><div class="stat-name">🍅 Tomatometer</div></div>`;
     });
 
@@ -430,7 +437,7 @@ function animateBars() {
   });
 }
 
-// ── Search (main) ─────────────────────────────────────────────────────────────────
+// ── Search (main) ─────────────────────────────────────────────────────────────
 
 let currentResults = [];
 let suggestTimer   = null;
@@ -458,11 +465,11 @@ async function doSearch(query) {
   }
 }
 
-// ── Compare search ────────────────────────────────────────────────────────────────
+// ── Compare search ────────────────────────────────────────────────────────────
 
 let compareTimer = null;
 
-async function addFilmToCompare(id) {
+async function addFilmToCompare(id, movieSnippet) {
   document.getElementById('compareSearchInput').value = '';
   document.getElementById('compareSuggestions').classList.add('hidden');
 
@@ -474,7 +481,7 @@ async function addFilmToCompare(id) {
     const breakdown = calcScare(movie, keywords, null);
     addToCompare(movie, breakdown);
 
-    // fetch RT and update score in background
+    // fetch RT and update breakdown score in background
     const year = (movie.release_date||'').slice(0,4);
     fetchRt(movie.title, year).then(rtScore => {
       if (rtScore === null) return;
@@ -488,7 +495,7 @@ async function addFilmToCompare(id) {
   }
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────────────
+// ── Toast ─────────────────────────────────────────────────────────────────────
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -498,9 +505,10 @@ function showToast(msg) {
   t._timer = setTimeout(()=>t.classList.add('hidden'), 2500);
 }
 
-// ── Init ─────────────────────────────────────────────────────────────────────────────
+// ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  // ── main search
   const searchInput = document.getElementById('searchInput');
   const searchBtn   = document.getElementById('searchBtn');
   const suggestions = document.getElementById('suggestions');
@@ -519,30 +527,35 @@ document.addEventListener('DOMContentLoaded', () => {
     suggestTimer = setTimeout(async ()=>{
       const movies = await searchMovies(q).catch(()=>[]);
       if (!movies.length) { suggestions.classList.add('hidden'); return; }
-      bindSuggestions(suggestions, movies, (id)=>openMovie(id,'homeSection'));
+      bindSuggestions(suggestions, movies, (id, m)=>openMovie(id,'homeSection'));
     }, 280);
   });
 
+  // ── results back
   document.getElementById('resultsBackBtn').addEventListener('click', ()=>{
     showSection('homeSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── detail back
   document.getElementById('backBtn').addEventListener('click', ()=>{
     showSection(detailBackTarget);
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── compare launch
   document.getElementById('compareLaunchBtn').addEventListener('click', ()=>{
     showSection('compareSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── compare back
   document.getElementById('compareBackBtn').addEventListener('click', ()=>{
     showSection('homeSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── compare search
   const cInput = document.getElementById('compareSearchInput');
   const cBtn   = document.getElementById('compareSearchBtn');
   const cSugg  = document.getElementById('compareSuggestions');
@@ -550,9 +563,11 @@ document.addEventListener('DOMContentLoaded', () => {
   function runCompareSearch() {
     const q = cInput.value.trim();
     if (!q) return;
+    cSugg.classList.add('hidden');
     searchMovies(q).then(movies=>{
       if (!movies.length) { showToast('No films found'); return; }
-      bindSuggestions(cSugg, movies, (id)=>addFilmToCompare(id));
+      bindSuggestions(cSugg, movies, (id,m)=>addFilmToCompare(id,m));
+      cSugg.classList.remove('hidden');
     }).catch(()=>showToast('Search failed'));
   }
 
@@ -565,12 +580,13 @@ document.addEventListener('DOMContentLoaded', () => {
     compareTimer = setTimeout(async ()=>{
       const movies = await searchMovies(q).catch(()=>[]);
       if (!movies.length) { cSugg.classList.add('hidden'); return; }
-      bindSuggestions(cSugg, movies, (id)=>addFilmToCompare(id));
+      bindSuggestions(cSugg, movies, (id,m)=>addFilmToCompare(id,m));
     }, 280);
   });
 
+  // close suggestions on outside click
   document.addEventListener('click', e=>{
-    if (!e.target.closest('.home-search-wrap'))   suggestions.classList.add('hidden');
+    if (!e.target.closest('.home-search-wrap'))  suggestions.classList.add('hidden');
     if (!e.target.closest('.compare-search-row')) cSugg.classList.add('hidden');
   });
 });
