@@ -16,12 +16,19 @@
     <section id="homeSection" class="home-section">
       <h1 class="site-title">Scare Factor</h1>
       <div class="home-search-wrap">
+        <button class="compare-launch-btn" id="compareLaunchBtn">⚔ Compare Films</button>
+        <div class="home-or-sep"><span>OR</span></div>
         <div class="search-bar">
           <input type="text" id="searchInput" placeholder="HUNT...if you dare" autocomplete="off" spellcheck="false" />
           <button id="searchBtn">Search</button>
         </div>
         <div id="suggestions" class="suggestions hidden"></div>
-        <button class="compare-launch-btn" id="compareLaunchBtn">⚔ Compare Films</button>
+      </div>
+      <div class="explore-section">
+        <div class="explore-btns">
+          <button class="explore-btn" id="scareAlgoBtn">🔬 Scare Algorithm</button>
+          <button class="explore-btn" id="discoverBtn">🎲 Recommend me something</button>
+        </div>
       </div>
       <div class="home-divider"></div>
       <div class="recent-section">
@@ -63,10 +70,76 @@
       </div>
 
       <div id="compareSlots" class="compare-slots">
-        <div class="compare-empty-hint">Search above to add films — up to 4 at once</div>
+        <div class="compare-empty-hint">Search above to add films — up to 3 at once</div>
       </div>
 
       <div id="compareChart" class="compare-chart hidden"></div>
+    </section>
+
+    <!-- ── Scare Calculator ── -->
+    <section id="calculatorSection" class="calculator-section hidden">
+      <div class="section-header">
+        <button class="back-btn" id="calcBackBtn">← Back</button>
+        <h2 class="section-title">Scare Algorithm</h2>
+      </div>
+      <p class="algo-intro">Dial up each horror dimension and watch your scare score recalculate in real time.</p>
+      <div class="calc-layout">
+        <div class="calc-panel">
+          <h3 class="calc-panel-title">Your Horror Profile</h3>
+          <div id="calcSliders" class="calc-sliders"></div>
+          <div class="calc-result-box">
+            <div class="calc-result-label">SCARE SCORE</div>
+            <div class="calc-score-display" id="calcScore">—</div>
+            <div class="calc-score-desc" id="calcDesc">—</div>
+            <div class="calc-score-bar-track"><div class="calc-score-bar-fill" id="calcBarFill"></div></div>
+          </div>
+          <button class="calc-reset-btn" id="calcResetBtn">↺ Reset to defaults</button>
+        </div>
+        <div class="calc-weights-panel">
+          <h3 class="calc-panel-title">Category Weights</h3>
+          <p class="calc-weights-note">Each category's multiplier in the scare formula:</p>
+          <div class="calc-weights-list" id="calcWeightsList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Discover ── -->
+    <section id="discoverSection" class="discover-section hidden">
+      <div class="section-header">
+        <button class="back-btn" id="discoverBackBtn">← Back</button>
+        <h2 class="section-title">Discover</h2>
+      </div>
+      <p class="discover-intro">Pick two horror films you know, choose a factor, and we'll find your next obsession.</p>
+      <div class="discover-inputs">
+        <div class="discover-film-slot">
+          <div class="discover-slot-label">Film 1</div>
+          <div class="discover-slot-inner" id="discoverInner1">
+            <input type="text" id="discoverInput1" class="discover-film-input" placeholder="Search a film..." autocomplete="off" spellcheck="false" />
+            <div id="discoverSugg1" class="suggestions hidden"></div>
+          </div>
+        </div>
+        <div class="discover-plus">+</div>
+        <div class="discover-film-slot">
+          <div class="discover-slot-label">Film 2</div>
+          <div class="discover-slot-inner" id="discoverInner2">
+            <input type="text" id="discoverInput2" class="discover-film-input" placeholder="Search a film..." autocomplete="off" spellcheck="false" />
+            <div id="discoverSugg2" class="suggestions hidden"></div>
+          </div>
+        </div>
+      </div>
+      <div class="discover-factor-wrap">
+        <div class="discover-factor-label">Factor</div>
+        <div class="discover-factor-pills" id="factorPills">
+          <button class="factor-pill active" data-factor="similar">Similar Vibe</button>
+          <button class="factor-pill" data-factor="scarier">More Scary</button>
+          <button class="factor-pill" data-factor="lighter">Less Scary</button>
+          <button class="factor-pill" data-factor="gore">Goriest</button>
+          <button class="factor-pill" data-factor="psychological">Most Psychological</button>
+          <button class="factor-pill" data-factor="supernatural">Most Supernatural</button>
+        </div>
+      </div>
+      <button class="discover-go-btn" id="discoverGoBtn">Find My Film →</button>
+      <div id="discoverResult" class="discover-result hidden"></div>
     </section>
 
   </main>

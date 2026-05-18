@@ -1,7 +1,6 @@
 // ── Config ───────────────────────────────────────────────────────────────────
 const TMDB_KEY   = 'f40d9966d6b39627111499fdb5a3e3e7';
 const TMDB_TOKEN = 'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiJmNDBkOTk2NmQ2YjM5NjI3MTExNDk5ZmRiNWEzZTNlNyIsIm5iZiI6MTc3ODQ2NjA3My4zMzYsInN1YiI6IjZhMDEzZDE5MjZmOTljODlkNjI0MTlmYiIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.hJJIPICzHtPXvMkXhMC69sMrW1U3x21nDT5fXnjX1CY';
-// Free OMDB key (get your own at https://www.omdbapi.com/apikey.aspx)
 const OMDB_KEY   = 'trilogy';
 
 const TMDB_BASE  = 'https://api.themoviedb.org/3';
@@ -52,10 +51,16 @@ const TEXT_SIGNALS = [
   { words: ['jump scare','shock'],                                        cat: 'tension',       weight: 1.5 },
 ];
 
-const CAT_WEIGHTS = { gore:1.4, demonic:1.3, slasher:1.2, supernatural:1.1, creature:1.0, occult:1.0, psychological:0.9, tension:0.7 };
-const CAT_LABELS  = { gore:'Gore', supernatural:'Supernatural', psychological:'Psychological', slasher:'Slasher', demonic:'Demonic', creature:'Creature / Monster', tension:'Tension', occult:'Occult' };
+const CAT_WEIGHTS = {
+  gore:1.4, demonic:1.3, slasher:1.2, supernatural:1.1,
+  creature:1.0, occult:1.0, psychological:0.9, tension:0.7,
+};
+const CAT_LABELS = {
+  gore:'Gore', supernatural:'Supernatural', psychological:'Psychological',
+  slasher:'Slasher', demonic:'Demonic', creature:'Creature', tension:'Tension', occult:'Occult',
+};
 
-function calcScare(movie, keywords = [], rtScore = null, rebertScore = null) {
+function calcScare(movie, keywords = [], rtScore = null, rebertScore = null, guardianScore = null, letterboxdScore = null) {
   const cats = { gore:0, supernatural:0, psychological:0, slasher:0, demonic:0, creature:0, tension:0, occult:0 };
 
   for (const kw of keywords) {
@@ -83,16 +88,15 @@ function calcScare(movie, keywords = [], rtScore = null, rebertScore = null) {
   const va = movie.vote_average || 5;
   cats.tension = Math.min(cats.tension + (va>7?1:va>6?0.5:0), 10);
 
-  // Sum category contributions
   let rawScore = 0;
   for (const [cat, val] of Object.entries(cats)) {
     rawScore += val * (CAT_WEIGHTS[cat] || 1);
   }
 
-  // External critic scores: a well-reviewed horror film earns extra weight
-  // RT 100% = +3.0, Ebert 4/4 = +2.0 added directly to rawScore
-  if (rtScore !== null)     rawScore += (rtScore / 100) * 3;
-  if (rebertScore !== null) rawScore += (rebertScore / 4) * 2;
+  if (rtScore !== null)         rawScore += (rtScore / 100) * 3;
+  if (rebertScore !== null)     rawScore += (rebertScore / 4) * 2;
+  if (guardianScore !== null)   rawScore += (guardianScore / 5) * 1.5;
+  if (letterboxdScore !== null) rawScore += (letterboxdScore / 5) * 1;
 
   let score = 1 + (rawScore / 15) * 4;
   score = Math.max(1, Math.min(5, Math.round(score)));
@@ -122,24 +126,34 @@ async function tmdb(path, params={}) {
   return res.json();
 }
 
-async function fetchRogerEbert(title, year) {
+async function corsProxy(targetUrl, timeout = 7000) {
+  const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), timeout);
   try {
-    const slug = title.toLowerCase()
-      .replace(/[‘’`]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-    const url = `https://www.rogerebert.com/reviews/${slug}-${year}`;
-    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 7000);
     const res = await fetch(proxy, { signal: ctrl.signal });
     clearTimeout(tid);
     if (!res.ok) return null;
-    const html = await res.text();
-    const m = html.match(/"ratingValue"\s*:\s*"?([0-4](?:\.[05])?)"/)
-           || html.match(/data-rating="([0-4](?:\.[05])?)"/);
+    return res.text();
+  } catch {
+    clearTimeout(tid);
+    return null;
+  }
+}
+
+async function fetchRogerEbert(title, year) {
+  try {
+    const slug = title.toLowerCase()
+      .replace(/[''`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const html = await corsProxy(`https://www.rogerebert.com/reviews/${slug}-${year}`);
+    if (!html) return null;
+    const m = html.match(/"ratingValue"\s*:\s*"?([0-4](?:\.[05])?)"/ ||
+              html.match(/data-rating="([0-4](?:\.[05])?)"/) ||
+              html.match(/class="[^"]*stars?-([0-9]+(?:-[05])?)"/ );
     if (!m) return null;
-    return parseFloat(m[1]);
+    return parseFloat(m[1].replace('-', '.'));
   } catch { return null; }
 }
 
@@ -156,6 +170,54 @@ async function fetchRt(title, year) {
     if (data.Response === 'False') return null;
     const rt = (data.Ratings||[]).find(r=>r.Source==='Rotten Tomatoes');
     return rt ? parseInt(rt.Value) : null;
+  } catch { return null; }
+}
+
+async function fetchGuardian(title, year) {
+  try {
+    const q = encodeURIComponent(`"${title}" review`);
+    let apiUrl = `https://content.guardianapis.com/search?q=${q}&section=film&tag=film/film&api-key=test&show-fields=starRating`;
+    if (year) {
+      const y = parseInt(year);
+      apiUrl += `&from-date=${y-1}-01-01&to-date=${y+1}-12-31`;
+    }
+    const res = await fetch(apiUrl);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = data.response?.results || [];
+    for (const r of results) {
+      const stars = r.fields?.starRating;
+      if (stars != null && stars !== '') return parseFloat(stars);
+    }
+    return null;
+  } catch { return null; }
+}
+
+async function fetchLetterboxd(title, year) {
+  try {
+    const slug = title.toLowerCase()
+      .replace(/[''`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    const tryParse = html => {
+      if (!html) return null;
+      const ldMatch = html.match(/"aggregateRating"[^}]*"ratingValue"\s*:\s*"?([0-9.]+)/);
+      if (ldMatch) return parseFloat(ldMatch[1]);
+      const dataMatch = html.match(/data-average-rating="([0-9.]+)"/);
+      if (dataMatch) return parseFloat(dataMatch[1]);
+      return null;
+    };
+
+    const urls = [`https://letterboxd.com/film/${slug}/`];
+    if (year) urls.push(`https://letterboxd.com/film/${slug}-${year}/`);
+
+    const results = await Promise.all(urls.map(u => corsProxy(u, 6000)));
+    for (const html of results) {
+      const score = tryParse(html);
+      if (score !== null) return score;
+    }
+    return null;
   } catch { return null; }
 }
 
@@ -203,17 +265,25 @@ function renderCard(movie, score, gore) {
     </div>`;
 }
 
-function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore) {
+function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore, guardianScore, letterboxdScore) {
   const { score, cats } = breakdown;
   const desc     = descriptor(score);
   const poster   = posterUrl(movie.poster_path, 'w500');
   const year     = (movie.release_date||'').slice(0,4);
   const runtime  = movie.runtime ? `${movie.runtime}m` : '';
   const rating   = movie.vote_average ? movie.vote_average.toFixed(1) : 'N/A';
-  const votes    = movie.vote_count ? movie.vote_count.toLocaleString() : '';
   const director = (credits.crew||[]).find(c=>c.job==='Director');
   const genres   = (movie.genres||[]).map(g=>`<span class="genre-tag">${esc(g.name)}</span>`).join('');
   const cast     = (credits.cast||[]).slice(0,8).map(c=>`<span class="cast-chip">${esc(c.name)}</span>`).join('');
+
+  const horrorTags = Object.entries(cats)
+    .filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1])
+    .map(([cat])=>`<span class="horror-tag horror-tag-${cat}">${CAT_LABELS[cat]||cat}</span>`)
+    .join('');
+
+  const kwTags = keywords.slice(0,10)
+    .map(kw=>`<span class="keyword-tag">${esc(kw.name)}</span>`)
+    .join('');
 
   const breakdownItems = Object.entries(cats)
     .filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])
@@ -223,17 +293,34 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore)
         <div class="breakdown-bar-track"><div class="breakdown-bar-fill" style="width:${(val/10)*100}%;background:${desc.color}"></div></div>
       </div>`).join('') || '<p style="color:var(--text-muted);font-size:0.84rem">No specific scare signals detected.</p>';
 
-  const rtBadge = rtScore !== null
-    ? `<div class="stat-card"><div class="stat-value" style="color:${rtScore>=60?'#f39c12':'#888899'}">${rtScore}%</div><div class="stat-name">🍅 Tomatometer</div></div>`
-    : `<div class="stat-card" id="rtPlaceholder"><div class="stat-value" style="color:var(--text-muted)">—</div><div class="stat-name">🍅 Tomatometer</div></div>`;
-
-  const rebertBadge = rebertScore !== null
-    ? `<div class="stat-card"><div class="stat-value" style="color:#f5c518">${rebertScore}/4</div><div class="stat-name">✌ Roger Ebert</div></div>`
-    : `<div class="stat-card" id="rebertPlaceholder"><div class="stat-value" style="color:var(--text-muted)">—</div><div class="stat-name">✌ Roger Ebert</div></div>`;
-
-  const criticsNote = (rtScore !== null || rebertScore !== null)
-    ? `<p class="critics-note">Scare score includes critic data — score may update as reviews load.</p>`
-    : `<p class="critics-note">Fetching critic reviews… score will update shortly.</p>`;
+  const sourceChips = `
+    <div class="source-chips-row">
+      <div class="source-chip active" title="TMDB User Rating">
+        <span class="source-chip-icon">⭐</span>
+        <span class="source-chip-label">TMDB</span>
+        <span class="source-chip-val">${rating}</span>
+      </div>
+      <div class="source-chip ${rtScore!==null?'active':'unavail'}" title="Rotten Tomatoes">
+        <span class="source-chip-icon">🍅</span>
+        <span class="source-chip-label">Tomatometer</span>
+        <span class="source-chip-val">${rtScore!==null?rtScore+'%':'—'}</span>
+      </div>
+      <div class="source-chip ${rebertScore!==null?'active':'unavail'}" title="Roger Ebert">
+        <span class="source-chip-icon">✒</span>
+        <span class="source-chip-label">Roger Ebert</span>
+        <span class="source-chip-val">${rebertScore!==null?rebertScore+'/4':'—'}</span>
+      </div>
+      <div class="source-chip ${guardianScore!==null?'active':'unavail'}" title="The Guardian">
+        <span class="source-chip-icon">📰</span>
+        <span class="source-chip-label">The Guardian</span>
+        <span class="source-chip-val">${guardianScore!==null?guardianScore+'/5':'—'}</span>
+      </div>
+      <div class="source-chip ${letterboxdScore!==null?'active':'unavail'}" title="Letterboxd">
+        <span class="source-chip-icon">📚</span>
+        <span class="source-chip-label">Letterboxd</span>
+        <span class="source-chip-val">${letterboxdScore!==null?letterboxdScore.toFixed(2)+'/5':'—'}</span>
+      </div>
+    </div>`;
 
   return `
     <div class="detail-layout">
@@ -255,33 +342,18 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore)
         <div class="detail-meta">
           ${year     ? `<span>${year}</span><span class="meta-dot">·</span>` : ''}
           ${runtime  ? `<span>${runtime}</span><span class="meta-dot">·</span>` : ''}
-          ${director ? `<span>Dir. ${esc(director.name)}</span><span class="meta-dot">·</span>` : ''}
-          <span>⭐ ${rating}</span>
-          ${votes ? `<span class="meta-dot">·</span><span>${votes} votes</span>` : ''}
+          ${director ? `<span>Dir. ${esc(director.name)}</span>` : ''}
         </div>
+
+        ${sourceChips}
+
+        ${horrorTags || kwTags ? `
+          <div class="tags-section">
+            <div class="tags-row">${horrorTags}${kwTags}</div>
+          </div>` : ''}
+
         <div class="genre-tags">${genres}</div>
         ${movie.overview ? `<p class="detail-overview">${esc(movie.overview)}</p>` : ''}
-
-        <div class="stats-row" id="statsRow">
-          <div class="stat-card">
-            <div class="stat-value" style="color:${desc.color}">${score}/5</div>
-            <div class="stat-name">Scare Score</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value">${rating}</div>
-            <div class="stat-name">⭐ TMDB</div>
-          </div>
-          ${rtBadge}
-          ${rebertBadge}
-          ${movie.popularity ? `<div class="stat-card"><div class="stat-value">${Math.round(movie.popularity)}</div><div class="stat-name">Popularity</div></div>` : ''}
-        </div>
-        <div class="rating-sources">
-          <span>Ratings from:</span>
-          <span class="source-badge">TMDB</span>
-          <span class="source-badge">🍅 Rotten Tomatoes</span>
-          <span class="source-badge">✌ Roger Ebert</span>
-        </div>
-        ${criticsNote}
 
         <div class="scare-breakdown">
           <h3>Scare breakdown</h3>
@@ -295,8 +367,8 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore)
 
 // ── Compare state ─────────────────────────────────────────────────────────────
 
-const compareList = []; // { movie, breakdown }
-const MAX_COMPARE = 4;
+const compareList = [];
+const MAX_COMPARE = 3;
 
 function addToCompare(movie, breakdown) {
   if (compareList.length >= MAX_COMPARE) { showToast(`Max ${MAX_COMPARE} films`); return false; }
@@ -317,7 +389,7 @@ function renderCompare() {
   const chart  = document.getElementById('compareChart');
 
   if (!compareList.length) {
-    slots.innerHTML = '<div class="compare-empty-hint">Search above to add films — up to 4 at once</div>';
+    slots.innerHTML = '<div class="compare-empty-hint">Search above to add films — up to 3 at once</div>';
     chart.classList.add('hidden');
     return;
   }
@@ -359,33 +431,28 @@ function renderCompare() {
       </div>`;
   }).join('');
 
-  // bind remove buttons
   slots.querySelectorAll('.compare-remove').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); removeFromCompare(btn.dataset.id); });
   });
 
-  // render chart
   if (compareList.length > 1) {
     chart.classList.remove('hidden');
-    const rows = compareList
+    chart.innerHTML = `<h3>Scare Ranking</h3>` + compareList
       .slice().sort((a,b)=>b.breakdown.score-a.breakdown.score)
       .map(({ movie, breakdown }) => {
         const { score } = breakdown;
         const desc = descriptor(score);
-        const pct  = (score / 5) * 100;
         return `
           <div class="chart-row">
             <span class="chart-label" title="${esc(movie.title)}">${esc(movie.title)}</span>
-            <div class="chart-track"><div class="chart-fill" style="width:${pct}%;background:${desc.color}"></div></div>
+            <div class="chart-track"><div class="chart-fill" style="width:${(score/5)*100}%;background:${desc.color}"></div></div>
             <span class="chart-val" style="color:${desc.color}">${score}</span>
           </div>`;
       }).join('');
 
-    chart.innerHTML = `<h3>Scare Ranking</h3>${rows}`;
-
     requestAnimationFrame(()=>{
       chart.querySelectorAll('.chart-fill').forEach(el=>{
-        const w = el.style.width; el.style.width='0';
+        const w=el.style.width; el.style.width='0';
         requestAnimationFrame(()=>{ el.style.width=w; });
       });
     });
@@ -396,7 +463,7 @@ function renderCompare() {
 
 // ── Suggestions ───────────────────────────────────────────────────────────────
 
-function buildSuggestions(movies, onSelect) {
+function buildSuggestions(movies) {
   return movies.slice(0,6).map(m=>{
     const thumb = posterUrl(m.poster_path,'w92');
     const year  = (m.release_date||'').slice(0,4);
@@ -424,7 +491,7 @@ function bindSuggestions(boxEl, movies, onSelect) {
 
 // ── Sections ──────────────────────────────────────────────────────────────────
 
-const SECTIONS = ['homeSection','resultsSection','movieDetail','compareSection'];
+const SECTIONS = ['homeSection','resultsSection','movieDetail','compareSection','calculatorSection','discoverSection'];
 
 function showSection(id) {
   SECTIONS.forEach(s=>document.getElementById(s).classList.toggle('hidden', s!==id));
@@ -443,20 +510,21 @@ async function openMovie(id, backTarget='homeSection') {
 
   try {
     const { movie, credits, keywords } = await getDetails(id);
-    const breakdown = calcScare(movie, keywords, null, null);
-    content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null, null);
+    const breakdown = calcScare(movie, keywords);
+    content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null, null, null, null);
     animateBars();
 
-    // Fetch RT + Roger Ebert in parallel; recalculate scare score when both arrive
     const year = (movie.release_date||'').slice(0,4);
     Promise.all([
       fetchRt(movie.title, year),
       fetchRogerEbert(movie.title, year),
-    ]).then(([rtScore, rebertScore]) => {
-      if (rtScore === null && rebertScore === null) return;
+      fetchGuardian(movie.title, year),
+      fetchLetterboxd(movie.title, year),
+    ]).then(([rtScore, rebertScore, guardianScore, letterboxdScore]) => {
+      if (rtScore === null && rebertScore === null && guardianScore === null && letterboxdScore === null) return;
       if (!document.getElementById('detailContent')) return;
-      const updated = calcScare(movie, keywords, rtScore, rebertScore);
-      content.innerHTML = renderDetail(movie, credits, keywords, updated, rtScore, rebertScore);
+      const updated = calcScare(movie, keywords, rtScore, rebertScore, guardianScore, letterboxdScore);
+      content.innerHTML = renderDetail(movie, credits, keywords, updated, rtScore, rebertScore, guardianScore, letterboxdScore);
       animateBars();
     });
 
@@ -491,7 +559,7 @@ async function doSearch(query) {
     const movies = await searchMovies(query);
     currentResults = movies;
     if (!movies.length) {
-      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No horror films found.</p>';
+      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No films found.</p>';
       return;
     }
     grid.innerHTML = movies.map(m=>{ const { score, cats } = calcScare(m); return renderCard(m, score, cats.gore); }).join('');
@@ -499,7 +567,7 @@ async function doSearch(query) {
       c.addEventListener('click',()=>openMovie(+c.dataset.id,'resultsSection'));
     });
   } catch(e) {
-    grid.innerHTML = '<p style="color:var(--red);grid-column:1/-1;padding:2rem 0">Error fetching results.</p>';
+    grid.innerHTML = '<p style="color:var(--accent);grid-column:1/-1;padding:2rem 0">Error fetching results.</p>';
   }
 }
 
@@ -507,7 +575,7 @@ async function doSearch(query) {
 
 let compareTimer = null;
 
-async function addFilmToCompare(id, movieSnippet) {
+async function addFilmToCompare(id) {
   document.getElementById('compareSearchInput').value = '';
   document.getElementById('compareSuggestions').classList.add('hidden');
 
@@ -516,19 +584,20 @@ async function addFilmToCompare(id, movieSnippet) {
 
   try {
     const { movie, keywords } = await getDetails(id);
-    const breakdown = calcScare(movie, keywords, null, null);
+    const breakdown = calcScare(movie, keywords);
     addToCompare(movie, breakdown);
 
-    // fetch RT + Ebert in background; recalculate with both
     const year = (movie.release_date||'').slice(0,4);
     Promise.all([
       fetchRt(movie.title, year),
       fetchRogerEbert(movie.title, year),
-    ]).then(([rtScore, rebertScore]) => {
-      if (rtScore === null && rebertScore === null) return;
+      fetchGuardian(movie.title, year),
+      fetchLetterboxd(movie.title, year),
+    ]).then(([rtScore, rebertScore, guardianScore, letterboxdScore]) => {
+      if (rtScore === null && rebertScore === null && guardianScore === null && letterboxdScore === null) return;
       const entry = compareList.find(e=>e.movie.id===id);
       if (!entry) return;
-      entry.breakdown = calcScare(movie, keywords, rtScore, rebertScore);
+      entry.breakdown = calcScare(movie, keywords, rtScore, rebertScore, guardianScore, letterboxdScore);
       renderCompare();
     });
   } catch(e) {
@@ -546,7 +615,7 @@ function showToast(msg) {
   t._timer = setTimeout(()=>t.classList.add('hidden'), 2500);
 }
 
-// ── Recent Releases ───────────────────────────────────────────────────────────
+// ── Recent films ──────────────────────────────────────────────────────────────
 
 async function loadRecent() {
   const list = document.getElementById('recentList');
@@ -559,14 +628,11 @@ async function loadRecent() {
       page: 1,
     });
     const movies = (data.results || []).slice(0, 20);
-
     if (!movies.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
-
     list.innerHTML = movies.map(m => {
       const { score, cats } = calcScare(m);
       return renderCard(m, score, cats.gore);
     }).join('');
-
     list.querySelectorAll('.movie-card').forEach(c => {
       c.addEventListener('click', () => openMovie(+c.dataset.id, 'homeSection'));
     });
@@ -575,12 +641,213 @@ async function loadRecent() {
   }
 }
 
+// ── Scare Calculator ──────────────────────────────────────────────────────────
+
+let calcInitialized = false;
+
+function initCalculator() {
+  if (calcInitialized) return;
+  calcInitialized = true;
+
+  const slidersEl  = document.getElementById('calcSliders');
+  const weightsEl  = document.getElementById('calcWeightsList');
+
+  slidersEl.innerHTML = Object.entries(CAT_LABELS).map(([cat, label]) => `
+    <div class="calc-slider-row">
+      <div class="calc-slider-header">
+        <span class="calc-slider-label">${label}</span>
+        <span class="calc-slider-val" id="calcVal-${cat}">5</span>
+      </div>
+      <input type="range" class="calc-slider" data-cat="${cat}" min="0" max="10" step="0.5" value="5" />
+    </div>`).join('');
+
+  weightsEl.innerHTML = Object.entries(CAT_WEIGHTS)
+    .sort((a,b)=>b[1]-a[1])
+    .map(([cat,w])=>`
+      <div class="calc-weight-row">
+        <span class="calc-weight-name">${CAT_LABELS[cat]||cat}</span>
+        <div class="calc-weight-bar-track">
+          <div class="calc-weight-bar-fill" style="width:${(w/1.4)*100}%"></div>
+        </div>
+        <span class="calc-weight-val">×${w}</span>
+      </div>`).join('');
+
+  slidersEl.querySelectorAll('.calc-slider').forEach(slider => {
+    slider.addEventListener('input', () => {
+      document.getElementById(`calcVal-${slider.dataset.cat}`).textContent = slider.value;
+      updateCalcScore();
+    });
+  });
+
+  updateCalcScore();
+
+  document.getElementById('calcResetBtn').addEventListener('click', () => {
+    document.querySelectorAll('.calc-slider').forEach(s => {
+      s.value = 5;
+      document.getElementById(`calcVal-${s.dataset.cat}`).textContent = '5';
+    });
+    updateCalcScore();
+  });
+}
+
+function updateCalcScore() {
+  let rawScore = 0;
+  document.querySelectorAll('.calc-slider').forEach(s => {
+    rawScore += parseFloat(s.value) * (CAT_WEIGHTS[s.dataset.cat] || 1);
+  });
+  const exact = Math.max(1, Math.min(5, 1 + (rawScore / 15) * 4));
+  const rounded = Math.round(exact);
+  const desc = descriptor(rounded);
+
+  const scoreEl = document.getElementById('calcScore');
+  const descEl  = document.getElementById('calcDesc');
+  const barEl   = document.getElementById('calcBarFill');
+
+  if (scoreEl) { scoreEl.textContent = exact.toFixed(1); scoreEl.style.color = desc.color; }
+  if (descEl)  { descEl.textContent = `${desc.icon} ${desc.label}`; descEl.style.color = desc.color; }
+  if (barEl)   { barEl.style.width = `${(exact/5)*100}%`; barEl.style.background = desc.color; }
+}
+
+// ── Discover ──────────────────────────────────────────────────────────────────
+
+let discoverFilm1 = null;
+let discoverFilm2 = null;
+let discoverFactor = 'similar';
+let discoverCandidates = [];
+let discoverIdx = 0;
+
+function setDiscoverFilm(num, movie) {
+  if (num === 1) {
+    discoverFilm1 = movie;
+    document.getElementById('discoverInput1').value = movie.title;
+    document.getElementById('discoverSugg1').classList.add('hidden');
+  } else {
+    discoverFilm2 = movie;
+    document.getElementById('discoverInput2').value = movie.title;
+    document.getElementById('discoverSugg2').classList.add('hidden');
+  }
+}
+
+async function runDiscover() {
+  if (!discoverFilm1 || !discoverFilm2) { showToast('Pick two films first'); return; }
+
+  const btn = document.getElementById('discoverGoBtn');
+  const resultEl = document.getElementById('discoverResult');
+  btn.textContent = 'Searching…';
+  btn.disabled = true;
+  resultEl.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+  resultEl.classList.remove('hidden');
+
+  try {
+    const [rec1, rec2, sim1, sim2] = await Promise.all([
+      tmdb(`/movie/${discoverFilm1.id}/recommendations`).then(d=>d.results||[]).catch(()=>[]),
+      tmdb(`/movie/${discoverFilm2.id}/recommendations`).then(d=>d.results||[]).catch(()=>[]),
+      tmdb(`/movie/${discoverFilm1.id}/similar`).then(d=>d.results||[]).catch(()=>[]),
+      tmdb(`/movie/${discoverFilm2.id}/similar`).then(d=>d.results||[]).catch(()=>[]),
+    ]);
+
+    const inputIds = new Set([discoverFilm1.id, discoverFilm2.id]);
+    const pool = new Map();
+
+    const addCandidate = (movie, weight) => {
+      if (!movie || !(movie.genre_ids||[]).includes(HORROR_ID)) return;
+      if (inputIds.has(movie.id)) return;
+      if (!pool.has(movie.id)) pool.set(movie.id, { movie, overlap: 0 });
+      pool.get(movie.id).overlap += weight;
+    };
+
+    rec1.forEach(m => addCandidate(m, 2));
+    rec2.forEach(m => addCandidate(m, 2));
+    sim1.forEach(m => addCandidate(m, 1));
+    sim2.forEach(m => addCandidate(m, 1));
+
+    const avgInputScore = [calcScare(discoverFilm1).score, calcScare(discoverFilm2).score]
+      .reduce((a,b)=>a+b,0) / 2;
+
+    const candidates = Array.from(pool.values()).map(({ movie, overlap }) => {
+      const { score, cats } = calcScare(movie);
+      return { movie, score, cats, overlap };
+    });
+
+    candidates.sort((a, b) => {
+      switch (discoverFactor) {
+        case 'similar': {
+          const aS = a.overlap * 2 - Math.abs(a.score - avgInputScore);
+          const bS = b.overlap * 2 - Math.abs(b.score - avgInputScore);
+          return bS - aS;
+        }
+        case 'scarier':       return b.score - a.score;
+        case 'lighter':       return a.score - b.score;
+        case 'gore':          return b.cats.gore - a.cats.gore;
+        case 'psychological': return b.cats.psychological - a.cats.psychological;
+        case 'supernatural':  return b.cats.supernatural - a.cats.supernatural;
+        default:              return b.overlap - a.overlap;
+      }
+    });
+
+    discoverCandidates = candidates;
+    discoverIdx = 0;
+
+    if (!candidates.length) {
+      resultEl.innerHTML = '<p style="color:var(--text-muted);padding:2rem;text-align:center">No recommendations found — try different films.</p>';
+    } else {
+      renderDiscoverResult();
+    }
+  } catch(e) {
+    resultEl.innerHTML = '<p style="color:var(--red);padding:2rem;text-align:center">Error fetching recommendations.</p>';
+    console.error(e);
+  } finally {
+    btn.textContent = 'Find My Film →';
+    btn.disabled = false;
+  }
+}
+
+function renderDiscoverResult() {
+  const resultEl = document.getElementById('discoverResult');
+  if (!discoverCandidates.length) return;
+
+  const { movie, score } = discoverCandidates[discoverIdx];
+  const desc   = descriptor(score);
+  const poster = posterUrl(movie.poster_path, 'w342');
+  const year   = (movie.release_date||'').slice(0,4);
+  const total  = Math.min(discoverCandidates.length, 10);
+
+  resultEl.innerHTML = `
+    <div class="discover-result-header">
+      <span class="discover-result-label">Recommended for you</span>
+      <span class="discover-result-count">${discoverIdx+1} / ${total}</span>
+    </div>
+    <div class="discover-result-card">
+      ${poster ? `<img class="discover-result-poster" src="${poster}" alt="${esc(movie.title)}" />`
+               : `<div class="discover-result-no-poster">🎬</div>`}
+      <div class="discover-result-info">
+        <div class="discover-result-title">${esc(movie.title)}</div>
+        ${year ? `<div class="discover-result-year">${year}</div>` : ''}
+        <span class="scare-badge ${scareClass(score)}">${desc.icon} ${score}/5 — ${desc.label}</span>
+        ${movie.overview ? `<p class="discover-result-overview">${esc(movie.overview.slice(0,220))}${movie.overview.length>220?'…':''}</p>` : ''}
+        <div class="discover-result-btns">
+          <button class="discover-open-btn" id="discoverOpenBtn">View Film →</button>
+          ${discoverIdx < total-1 ? `<button class="discover-refresh-btn" id="discoverNextBtn">↻ Try another</button>` : ''}
+        </div>
+      </div>
+    </div>`;
+
+  resultEl.classList.remove('hidden');
+
+  document.getElementById('discoverOpenBtn')?.addEventListener('click', () => {
+    openMovie(movie.id, 'discoverSection');
+  });
+  document.getElementById('discoverNextBtn')?.addEventListener('click', () => {
+    discoverIdx = Math.min(discoverIdx + 1, total - 1);
+    renderDiscoverResult();
+  });
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
   loadRecent();
 
-  // ── main search
   const searchInput = document.getElementById('searchInput');
   const searchBtn   = document.getElementById('searchBtn');
   const suggestions = document.getElementById('suggestions');
@@ -599,35 +866,26 @@ document.addEventListener('DOMContentLoaded', () => {
     suggestTimer = setTimeout(async ()=>{
       const movies = await searchMovies(q).catch(()=>[]);
       if (!movies.length) { suggestions.classList.add('hidden'); return; }
-      bindSuggestions(suggestions, movies, (id, m)=>openMovie(id,'homeSection'));
+      bindSuggestions(suggestions, movies, (id)=>openMovie(id,'homeSection'));
     }, 280);
   });
 
-  // ── results back
   document.getElementById('resultsBackBtn').addEventListener('click', ()=>{
-    showSection('homeSection');
-    window.scrollTo({top:0,behavior:'smooth'});
+    showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── detail back
   document.getElementById('backBtn').addEventListener('click', ()=>{
-    showSection(detailBackTarget);
-    window.scrollTo({top:0,behavior:'smooth'});
+    showSection(detailBackTarget); window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── compare launch
   document.getElementById('compareLaunchBtn').addEventListener('click', ()=>{
-    showSection('compareSection');
-    window.scrollTo({top:0,behavior:'smooth'});
+    showSection('compareSection'); window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── compare back
   document.getElementById('compareBackBtn').addEventListener('click', ()=>{
-    showSection('homeSection');
-    window.scrollTo({top:0,behavior:'smooth'});
+    showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
   });
 
-  // ── compare search
   const cInput = document.getElementById('compareSearchInput');
   const cBtn   = document.getElementById('compareSearchBtn');
   const cSugg  = document.getElementById('compareSuggestions');
@@ -638,7 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
     cSugg.classList.add('hidden');
     searchMovies(q).then(movies=>{
       if (!movies.length) { showToast('No films found'); return; }
-      bindSuggestions(cSugg, movies, (id,m)=>addFilmToCompare(id,m));
+      bindSuggestions(cSugg, movies, (id)=>addFilmToCompare(id));
       cSugg.classList.remove('hidden');
     }).catch(()=>showToast('Search failed'));
   }
@@ -652,13 +910,65 @@ document.addEventListener('DOMContentLoaded', () => {
     compareTimer = setTimeout(async ()=>{
       const movies = await searchMovies(q).catch(()=>[]);
       if (!movies.length) { cSugg.classList.add('hidden'); return; }
-      bindSuggestions(cSugg, movies, (id,m)=>addFilmToCompare(id,m));
+      bindSuggestions(cSugg, movies, (id)=>addFilmToCompare(id));
     }, 280);
   });
 
-  // close suggestions on outside click
+  document.getElementById('scareAlgoBtn').addEventListener('click', ()=>{
+    showSection('calculatorSection');
+    initCalculator();
+    window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  document.getElementById('calcBackBtn').addEventListener('click', ()=>{
+    showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  document.getElementById('discoverBtn').addEventListener('click', ()=>{
+    showSection('discoverSection'); window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  document.getElementById('discoverBackBtn').addEventListener('click', ()=>{
+    showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  function bindDiscoverInput(num, inputId, suggId) {
+    const input = document.getElementById(inputId);
+    const sugg  = document.getElementById(suggId);
+    let timer   = null;
+
+    input.addEventListener('input', ()=>{
+      clearTimeout(timer);
+      const q = input.value.trim();
+      if (!q) { sugg.classList.add('hidden'); return; }
+      timer = setTimeout(async ()=>{
+        const movies = await searchMovies(q).catch(()=>[]);
+        if (!movies.length) { sugg.classList.add('hidden'); return; }
+        bindSuggestions(sugg, movies, (id, m)=>setDiscoverFilm(num, m));
+      }, 280);
+    });
+    input.addEventListener('keydown', e=>{
+      if (e.key==='Escape') sugg.classList.add('hidden');
+    });
+  }
+
+  bindDiscoverInput(1, 'discoverInput1', 'discoverSugg1');
+  bindDiscoverInput(2, 'discoverInput2', 'discoverSugg2');
+
+  document.getElementById('factorPills').addEventListener('click', e=>{
+    const pill = e.target.closest('.factor-pill');
+    if (!pill) return;
+    document.querySelectorAll('.factor-pill').forEach(p=>p.classList.remove('active'));
+    pill.classList.add('active');
+    discoverFactor = pill.dataset.factor;
+  });
+
+  document.getElementById('discoverGoBtn').addEventListener('click', runDiscover);
+
   document.addEventListener('click', e=>{
-    if (!e.target.closest('.home-search-wrap'))  suggestions.classList.add('hidden');
+    if (!e.target.closest('.home-search-wrap'))   suggestions.classList.add('hidden');
     if (!e.target.closest('.compare-search-row')) cSugg.classList.add('hidden');
+    if (!e.target.closest('#discoverInner1'))     document.getElementById('discoverSugg1').classList.add('hidden');
+    if (!e.target.closest('#discoverInner2'))     document.getElementById('discoverSugg2').classList.add('hidden');
   });
 });
