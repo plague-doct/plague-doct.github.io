@@ -10,27 +10,25 @@
 </head>
 <body>
 
-  <header>
-    <div class="logo">
-      <!-- skull asset — swap src when ready -->
-      <img class="skull-asset" src="skull.svg" alt="" onerror="this.style.display='none'" />
-      <h1>ScareFactory</h1>
-    </div>
-  </header>
-
-  <div class="page-wrap">
   <main>
 
     <!-- ── Home ── -->
     <section id="homeSection" class="home-section">
+      <h1 class="site-title">Scare Factor</h1>
       <div class="home-search-wrap">
         <div class="search-bar">
-          <input type="text" id="searchInput" placeholder="Search a horror film..." autocomplete="off" spellcheck="false" />
+          <input type="text" id="searchInput" placeholder="HUNT...if you dare" autocomplete="off" spellcheck="false" />
           <button id="searchBtn">Search</button>
         </div>
         <div id="suggestions" class="suggestions hidden"></div>
-        <p class="hunt-tagline">hunt if you dare</p>
         <button class="compare-launch-btn" id="compareLaunchBtn">⚔ Compare Films</button>
+      </div>
+      <div class="home-divider"></div>
+      <div class="recent-section">
+        <h2 class="recent-title">Recent Releases</h2>
+        <div id="recentList" class="recent-list">
+          <div class="sidebar-loading">Loading...</div>
+        </div>
       </div>
     </section>
 
@@ -72,16 +70,6 @@
     </section>
 
   </main>
-
-  <!-- ── Sidebar ── -->
-  <aside class="sidebar">
-    <div class="sidebar-title">🔥 Scariest Now</div>
-    <div id="sidebarList" class="sidebar-list">
-      <div class="sidebar-loading">Loading...</div>
-    </div>
-  </aside>
-
-  </div><!-- /.page-wrap -->
 
   <footer>
     <p>Data by <a href="https://www.themoviedb.org" target="_blank">TMDB</a>. Scare scores are calculated, not official ratings.</p>

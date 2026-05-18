@@ -83,6 +83,7 @@ function calcScare(movie, keywords = [], rtScore = null) {
   const va = movie.vote_average || 5;
   cats.tension = Math.min(cats.tension + (va>7?1:va>6?0.5:0), 10);
 
+  // RT signal: a high critics score on a horror film means it's effectively scary
   if (rtScore !== null) {
     const rtBonus = (rtScore / 100) * 1.5;
     cats.tension = Math.min(cats.tension + rtBonus, 10);
@@ -90,6 +91,8 @@ function calcScare(movie, keywords = [], rtScore = null) {
 
   const isHorror = (movie.genres||[]).some(g=>g.id===HORROR_ID) || (movie.genre_ids||[]).includes(HORROR_ID);
 
+  // Sum weighted contributions then map to 1-5
+  // rawScore of ~15 = max scary; 0 = no signals
   let rawScore = 0;
   for (const [cat, val] of Object.entries(cats)) {
     rawScore += val * (CAT_WEIGHTS[cat] || 1);
@@ -121,6 +124,27 @@ async function tmdb(path, params={}) {
   const res = await fetch(url, { headers: tmdbHeaders });
   if (!res.ok) throw new Error(`TMDB ${res.status}`);
   return res.json();
+}
+
+async function fetchRogerEbert(title, year) {
+  try {
+    const slug = title.toLowerCase()
+      .replace(/[‘’`]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const url = `https://www.rogerebert.com/reviews/${slug}-${year}`;
+    const proxy = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 7000);
+    const res = await fetch(proxy, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const m = html.match(/"ratingValue"\s*:\s*"?([0-4](?:\.[05])?)"/)
+           || html.match(/data-rating="([0-4](?:\.[05])?)"/);
+    if (!m) return null;
+    return parseFloat(m[1]);
+  } catch { return null; }
 }
 
 async function fetchRt(title, year) {
@@ -183,7 +207,7 @@ function renderCard(movie, score, gore) {
     </div>`;
 }
 
-function renderDetail(movie, credits, keywords, breakdown, rtScore) {
+function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore) {
   const { score, cats } = breakdown;
   const desc     = descriptor(score);
   const poster   = posterUrl(movie.poster_path, 'w500');
@@ -206,6 +230,10 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore) {
   const rtBadge = rtScore !== null
     ? `<div class="stat-card"><div class="stat-value" style="color:${rtScore>=60?'#f39c12':'#888899'}">${rtScore}%</div><div class="stat-name">🍅 Tomatometer</div></div>`
     : `<div class="stat-card" id="rtPlaceholder"><div class="stat-value" style="color:var(--text-muted)">—</div><div class="stat-name">🍅 Tomatometer</div></div>`;
+
+  const rebertBadge = rebertScore !== null
+    ? `<div class="stat-card"><div class="stat-value" style="color:#f5c518">${rebertScore}/4</div><div class="stat-name">✌ Roger Ebert</div></div>`
+    : `<div class="stat-card" id="rebertPlaceholder"><div class="stat-value" style="color:var(--text-muted)">—</div><div class="stat-name">✌ Roger Ebert</div></div>`;
 
   return `
     <div class="detail-layout">
@@ -241,10 +269,17 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore) {
           </div>
           <div class="stat-card">
             <div class="stat-value">${rating}</div>
-            <div class="stat-name">TMDB Rating</div>
+            <div class="stat-name">⭐ TMDB</div>
           </div>
           ${rtBadge}
+          ${rebertBadge}
           ${movie.popularity ? `<div class="stat-card"><div class="stat-value">${Math.round(movie.popularity)}</div><div class="stat-name">Popularity</div></div>` : ''}
+        </div>
+        <div class="rating-sources">
+          <span>Ratings from:</span>
+          <span class="source-badge">TMDB</span>
+          <span class="source-badge">🍅 Rotten Tomatoes</span>
+          <span class="source-badge">✌ Roger Ebert</span>
         </div>
 
         <div class="scare-breakdown">
@@ -323,10 +358,12 @@ function renderCompare() {
       </div>`;
   }).join('');
 
+  // bind remove buttons
   slots.querySelectorAll('.compare-remove').forEach(btn => {
     btn.addEventListener('click', e => { e.stopPropagation(); removeFromCompare(btn.dataset.id); });
   });
 
+  // render chart
   if (compareList.length > 1) {
     chart.classList.remove('hidden');
     const maxScore = Math.max(...compareList.map(e=>e.breakdown.score));
@@ -346,6 +383,7 @@ function renderCompare() {
 
     chart.innerHTML = `<h3>Scare Ranking</h3>${rows}`;
 
+    // animate
     requestAnimationFrame(()=>{
       chart.querySelectorAll('.chart-fill').forEach(el=>{
         const w = el.style.width; el.style.width='0';
@@ -407,16 +445,22 @@ async function openMovie(id, backTarget='homeSection') {
   try {
     const { movie, credits, keywords } = await getDetails(id);
     const breakdown = calcScare(movie, keywords, null);
-    content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null);
+    content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null, null);
     animateBars();
 
+    // Fetch RT and Roger Ebert in background
     const year = (movie.release_date||'').slice(0,4);
     fetchRt(movie.title, year).then(rtScore => {
       if (rtScore === null) return;
       const placeholder = document.getElementById('rtPlaceholder');
       if (!placeholder) return;
-      const desc = descriptor(breakdown.score);
       placeholder.outerHTML = `<div class="stat-card"><div class="stat-value" style="color:${rtScore>=60?'#f39c12':'#888899'}">${rtScore}%</div><div class="stat-name">🍅 Tomatometer</div></div>`;
+    });
+    fetchRogerEbert(movie.title, year).then(rebertScore => {
+      if (rebertScore === null) return;
+      const placeholder = document.getElementById('rebertPlaceholder');
+      if (!placeholder) return;
+      placeholder.outerHTML = `<div class="stat-card"><div class="stat-value" style="color:#f5c518">${rebertScore}/4</div><div class="stat-name">✌ Roger Ebert</div></div>`;
     });
 
   } catch (e) {
@@ -450,7 +494,7 @@ async function doSearch(query) {
     const movies = await searchMovies(query);
     currentResults = movies;
     if (!movies.length) {
-      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No horror films found.</p>';
+      grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No films found.</p>';
       return;
     }
     grid.innerHTML = movies.map(m=>{ const { score, cats } = calcScare(m); return renderCard(m, score, cats.gore); }).join('');
@@ -458,7 +502,7 @@ async function doSearch(query) {
       c.addEventListener('click',()=>openMovie(+c.dataset.id,'resultsSection'));
     });
   } catch(e) {
-    grid.innerHTML = '<p style="color:var(--accent);grid-column:1/-1;padding:2rem 0">Error fetching results.</p>';
+    grid.innerHTML = '<p style="color:var(--red);grid-column:1/-1;padding:2rem 0">Error fetching results.</p>';
   }
 }
 
@@ -478,6 +522,7 @@ async function addFilmToCompare(id, movieSnippet) {
     const breakdown = calcScare(movie, keywords, null);
     addToCompare(movie, breakdown);
 
+    // fetch RT and update breakdown score in background
     const year = (movie.release_date||'').slice(0,4);
     fetchRt(movie.title, year).then(rtScore => {
       if (rtScore === null) return;
@@ -501,43 +546,29 @@ function showToast(msg) {
   t._timer = setTimeout(()=>t.classList.add('hidden'), 2500);
 }
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
+// ── Recent Releases ───────────────────────────────────────────────────────────
 
-async function loadSidebar() {
-  const list = document.getElementById('sidebarList');
+async function loadRecent() {
+  const list = document.getElementById('recentList');
+  if (!list) return;
   try {
     const data = await tmdb('/discover/movie', {
       with_genres: HORROR_ID,
       sort_by: 'popularity.desc',
-      'vote_count.gte': 100,
+      'vote_count.gte': 50,
       page: 1,
     });
-    const movies = (data.results || []).slice(0, 12);
-    const scored = movies
-      .map(m => ({ m, score: calcScare(m).score }))
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 8);
+    const movies = (data.results || []).slice(0, 20);
 
-    if (!scored.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
+    if (!movies.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
 
-    list.innerHTML = scored.map(({ m, score }) => {
-      const desc  = descriptor(score);
-      const thumb = posterUrl(m.poster_path, 'w92');
-      const year  = (m.release_date||'').slice(0,4);
-      return `
-        <div class="sidebar-item" data-id="${m.id}">
-          ${thumb
-            ? `<img class="sidebar-thumb" src="${thumb}" alt="" loading="lazy" />`
-            : `<div class="sidebar-no-thumb">🎬</div>`}
-          <div class="sidebar-info">
-            <div class="sidebar-name">${esc(m.title)}${year ? ` <span style="color:var(--text-muted);font-weight:400">(${year})</span>` : ''}</div>
-            <div class="sidebar-score" style="color:${desc.color}">${desc.icon} ${score}/5</div>
-          </div>
-        </div>`;
+    list.innerHTML = movies.map(m => {
+      const { score, cats } = calcScare(m);
+      return renderCard(m, score, cats.gore);
     }).join('');
 
-    list.querySelectorAll('.sidebar-item').forEach(el => {
-      el.addEventListener('click', () => openMovie(+el.dataset.id, 'homeSection'));
+    list.querySelectorAll('.movie-card').forEach(c => {
+      c.addEventListener('click', () => openMovie(+c.dataset.id, 'homeSection'));
     });
   } catch {
     list.innerHTML = '<div class="sidebar-loading">Unavailable</div>';
@@ -547,8 +578,9 @@ async function loadSidebar() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadSidebar();
+  loadRecent();
 
+  // ── main search
   const searchInput = document.getElementById('searchInput');
   const searchBtn   = document.getElementById('searchBtn');
   const suggestions = document.getElementById('suggestions');
@@ -571,26 +603,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 280);
   });
 
+  // ── results back
   document.getElementById('resultsBackBtn').addEventListener('click', ()=>{
     showSection('homeSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── detail back
   document.getElementById('backBtn').addEventListener('click', ()=>{
     showSection(detailBackTarget);
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── compare launch
   document.getElementById('compareLaunchBtn').addEventListener('click', ()=>{
     showSection('compareSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── compare back
   document.getElementById('compareBackBtn').addEventListener('click', ()=>{
     showSection('homeSection');
     window.scrollTo({top:0,behavior:'smooth'});
   });
 
+  // ── compare search
   const cInput = document.getElementById('compareSearchInput');
   const cBtn   = document.getElementById('compareSearchBtn');
   const cSugg  = document.getElementById('compareSuggestions');
@@ -600,7 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!q) return;
     cSugg.classList.add('hidden');
     searchMovies(q).then(movies=>{
-      if (!movies.length) { showToast('No horror films found'); return; }
+      if (!movies.length) { showToast('No films found'); return; }
       bindSuggestions(cSugg, movies, (id,m)=>addFilmToCompare(id,m));
       cSugg.classList.remove('hidden');
     }).catch(()=>showToast('Search failed'));
@@ -619,6 +656,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 280);
   });
 
+  // close suggestions on outside click
   document.addEventListener('click', e=>{
     if (!e.target.closest('.home-search-wrap'))  suggestions.classList.add('hidden');
     if (!e.target.closest('.compare-search-row')) cSugg.classList.add('hidden');
