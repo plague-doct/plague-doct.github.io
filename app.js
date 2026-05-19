@@ -104,16 +104,20 @@ function calcScare(movie, keywords = [], rtScore = null, rebertScore = null, gua
 }
 
 const DESCRIPTORS = [
-  { max:1, label:'Not that Scary',      icon:'😴', color:'#27ae60' },
-  { max:2, label:'Bit Spooky',          icon:'🙂', color:'#c87800' },
-  { max:3, label:'In for a good scare', icon:'😨', color:'#e67e22' },
-  { max:4, label:'Tough as nails',      icon:'😱', color:'#c00000' },
-  { max:5, label:'Nightmare fuel',      icon:'💀', color:'#8e44ad' },
+  { max:1, label:'Not that Scary',      icon:'icons/1.png', color:'#27ae60' },
+  { max:2, label:'Bit Spooky',          icon:'icons/2.png', color:'#c87800' },
+  { max:3, label:'In for a good scare', icon:'icons/3.png', color:'#e67e22' },
+  { max:4, label:'Tough as nails',      icon:'icons/4.png', color:'#c00000' },
+  { max:5, label:'Nightmare fuel',      icon:'icons/5.png', color:'#8e44ad' },
 ];
+
+function scareImg(icon, cls = 'scare-icon') {
+  return `<img src="${icon}" alt="" class="${cls}" />`;
+}
 
 function descriptor(score) { return DESCRIPTORS.find(d=>score<=d.max)||DESCRIPTORS[DESCRIPTORS.length-1]; }
 function scareClass(score) { return `scare-${Math.max(1,Math.min(5,Math.round(score)))}`; }
-function scareIcons(score) { return '💀'.repeat(Math.max(0,Math.round(score))); }
+function scareIcons(icon, score) { return Array(Math.max(0,Math.round(score))).fill(scareImg(icon,'scare-icon-sm')).join(''); }
 
 // ── API helpers ───────────────────────────────────────────────────────────────
 
@@ -267,7 +271,7 @@ function renderCard(movie, score, cats) {
       <div class="card-info">
         <div class="card-title">${esc(movie.title)}</div>
         ${year ? `<div class="card-year">${year}</div>` : ''}
-        <span class="scare-badge ${scareClass(score)}">${desc.icon} ${score}/5</span>
+        <span class="scare-badge ${scareClass(score)}">${scareImg(desc.icon)} ${score}/5</span>
         ${topCats.length ? `<div class="card-cats">${catRows}</div>` : ''}
       </div>
     </div>`;
@@ -338,11 +342,11 @@ function renderDetail(movie, credits, keywords, breakdown, rtScore, rebertScore,
         <div class="scare-meter-wrap">
           <div class="scare-label">Scare Factor</div>
           <div class="scare-score" style="color:${desc.color}">${score}</div>
-          <div class="scare-descriptor" style="color:${desc.color}">${desc.icon} ${desc.label}</div>
+          <div class="scare-descriptor" style="color:${desc.color}">${scareImg(desc.icon)} ${desc.label}</div>
           <div class="scare-bar-track">
             <div class="scare-bar-fill" style="width:${(score/5)*100}%;background:linear-gradient(90deg,${desc.color}aa,${desc.color})"></div>
           </div>
-          <div class="scare-icons">${scareIcons(score)}</div>
+          <div class="scare-icons">${scareIcons(desc.icon, score)}</div>
         </div>
       </div>
       <div class="detail-info">
@@ -430,7 +434,7 @@ function renderCompare() {
           <div class="compare-score-row">
             <div class="compare-score-big" style="color:${desc.color}">${score}</div>
             <div>
-              <div class="compare-desc" style="color:${desc.color}">${desc.icon} ${desc.label}</div>
+              <div class="compare-desc" style="color:${desc.color}">${scareImg(desc.icon)} ${desc.label}</div>
             </div>
           </div>
           <div class="compare-mini-bars">${miniBars}</div>
@@ -777,14 +781,14 @@ function updateCalcScore() {
   const barEl   = document.getElementById('calcBarFill');
 
   if (scoreEl) { scoreEl.textContent = exact.toFixed(1); scoreEl.style.color = desc.color; }
-  if (descEl)  { descEl.textContent = `${desc.icon} ${desc.label}`; descEl.style.color = desc.color; }
+  if (descEl)  { descEl.innerHTML = `${scareImg(desc.icon)} ${desc.label}`; descEl.style.color = desc.color; }
   if (barEl)   { barEl.style.width = `${(exact/5)*100}%`; barEl.style.background = desc.color; }
 
   const exScore = document.getElementById('calcExScore');
   const exDesc  = document.getElementById('calcExDesc');
   const exBar   = document.getElementById('calcExBar');
   if (exScore) { exScore.textContent = exact.toFixed(1); exScore.style.color = desc.color; }
-  if (exDesc)  { exDesc.textContent = `${desc.icon} ${desc.label}`; exDesc.style.color = desc.color; }
+  if (exDesc)  { exDesc.innerHTML = `${scareImg(desc.icon)} ${desc.label}`; exDesc.style.color = desc.color; }
   if (exBar)   { exBar.style.width = `${(exact/5)*100}%`; exBar.style.background = desc.color; }
 }
 
@@ -903,7 +907,7 @@ function renderDiscoverResult() {
       <div class="discover-result-info">
         <div class="discover-result-title">${esc(movie.title)}</div>
         ${year ? `<div class="discover-result-year">${year}</div>` : ''}
-        <span class="scare-badge ${scareClass(score)}">${desc.icon} ${score}/5 — ${desc.label}</span>
+        <span class="scare-badge ${scareClass(score)}">${scareImg(desc.icon)} ${score}/5 — ${desc.label}</span>
         ${movie.overview ? `<p class="discover-result-overview">${esc(movie.overview.slice(0,220))}${movie.overview.length>220?'…':''}</p>` : ''}
         <div class="discover-result-btns">
           <button class="discover-open-btn" id="discoverOpenBtn">View Film →</button>

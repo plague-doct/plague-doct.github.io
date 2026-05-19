@@ -500,6 +500,24 @@ main {
   transition: width 0.5s ease;
 }
 
+.scare-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  vertical-align: middle;
+  display: inline-block;
+  image-rendering: pixelated;
+}
+
+.scare-icon-sm {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  vertical-align: middle;
+  display: inline-block;
+  image-rendering: pixelated;
+}
+
 .scare-badge {
   align-items: center;
   border-radius: 4px;
