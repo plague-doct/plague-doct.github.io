@@ -532,6 +532,7 @@ async function openMovie(id, backTarget='homeSection') {
 
   try {
     const { movie, credits, keywords } = await getDetails(id);
+    keywordsCache.set(id, keywords);
     const breakdown = calcScare(movie, keywords);
     content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null, null, null, null);
     animateBars();
@@ -637,6 +638,10 @@ function showToast(msg) {
   t._timer = setTimeout(()=>t.classList.add('hidden'), 2500);
 }
 
+// ── Keyword cache (shared between thumbnails and detail view) ─────────────────
+
+const keywordsCache = new Map(); // movieId → keywords[]
+
 // ── Recent films ──────────────────────────────────────────────────────────────
 
 let recentMovies = [];
@@ -647,7 +652,8 @@ function rerenderRecent() {
   const list = document.getElementById('recentList');
   if (!list) return;
   list.innerHTML = recentMovies.map(m => {
-    const { score, cats } = calcScare(m);
+    const kws = keywordsCache.get(m.id) || [];
+    const { score, cats } = calcScare(m, kws);
     return renderCard(m, score, cats);
   }).join('');
   list.querySelectorAll('.movie-card').forEach(c => {
@@ -675,6 +681,8 @@ async function loadRecent() {
     });
     recentMovies = (data.results || []).slice(0, 20);
     if (!recentMovies.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
+
+    // Quick render with text-only scores while keywords load
     list.innerHTML = recentMovies.map(m => {
       const { score, cats } = calcScare(m);
       return renderCard(m, score, cats);
@@ -682,6 +690,20 @@ async function loadRecent() {
     list.querySelectorAll('.movie-card').forEach(c => {
       c.addEventListener('click', () => openMovie(+c.dataset.id, 'homeSection'));
     });
+
+    // Fetch keywords in parallel, then re-render with accurate scores
+    list.classList.add('cards-recalculating');
+    await Promise.all(recentMovies.map(async m => {
+      if (keywordsCache.has(m.id)) return;
+      try {
+        const kw = await tmdb(`/movie/${m.id}/keywords`);
+        keywordsCache.set(m.id, kw.keywords || []);
+      } catch {
+        keywordsCache.set(m.id, []);
+      }
+    }));
+    rerenderRecent();
+
   } catch {
     list.innerHTML = '<div class="sidebar-loading">Unavailable</div>';
   }
