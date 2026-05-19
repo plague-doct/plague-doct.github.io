@@ -242,6 +242,105 @@ main {
 #compareSearchBtn:hover { background: var(--red-bright); border-color: var(--red-bright); }
 #compareSearchBtn:active { transform: scale(0.97); }
 
+/* ── How it works ─────────────────────────────────────────────── */
+.how-it-works {
+  width: 100%;
+  max-width: 860px;
+  margin: 1.5rem auto 0;
+}
+
+.how-toggle {
+  background: transparent;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  letter-spacing: 1.5px;
+  padding: 0.45rem 1.2rem;
+  transition: border-color 0.2s, color 0.2s;
+}
+.how-toggle:hover { border-color: var(--red); color: var(--red); }
+
+.how-content {
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  margin-top: 0.75rem;
+  padding: 1.5rem;
+}
+.how-content.hidden { display: none; }
+
+.how-intro {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+}
+
+.how-levels {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.how-level {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 90px;
+  text-align: center;
+}
+
+.how-icon { width: 36px; height: 36px; image-rendering: pixelated; }
+
+.how-level-score {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.how-level-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.how-cats-wrap { margin-bottom: 1rem; }
+
+.how-cats-label {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.how-cats { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+.how-cat-pill {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 0.25rem 0.75rem;
+}
+
+.how-sources {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  margin: 0;
+  opacity: 0.7;
+}
+
+/* ── ─────────────────────────────────────────────────────────── */
 .home-divider {
   width: 100%;
   height: 2px;

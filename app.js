@@ -1178,6 +1178,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 280);
   });
 
+  // ── How it works panel ──────────────────────────────────────────────────────
+  const howContent = document.getElementById('howContent');
+  if (howContent) {
+    const levelRows = DESCRIPTORS.map((d, i) => `
+      <div class="how-level">
+        <div class="how-level-icon">${scareImg(d.icon, 'how-icon')}</div>
+        <div class="how-level-score" style="color:${d.color}">${i + 1}/5</div>
+        <div class="how-level-label" style="color:${d.color}">${d.label}</div>
+      </div>`).join('');
+
+    const catRows = Object.entries(CAT_LABELS).map(([, label]) =>
+      `<span class="how-cat-pill">${label}</span>`
+    ).join('');
+
+    howContent.innerHTML = `
+      <p class="how-intro">Every film is scored 1–5 across 8 horror dimensions using TMDB keywords, plot analysis, genre signals, and external critic reviews. The result is your personalised Scare Factor.</p>
+      <div class="how-levels">${levelRows}</div>
+      <div class="how-cats-wrap">
+        <div class="how-cats-label">Scored dimensions</div>
+        <div class="how-cats">${catRows}</div>
+      </div>
+      <p class="how-sources">Sources: TMDB · Rotten Tomatoes · Roger Ebert · The Guardian · Letterboxd</p>`;
+  }
+
+  document.getElementById('howToggle').addEventListener('click', () => {
+    const content = document.getElementById('howContent');
+    const btn = document.getElementById('howToggle');
+    const open = !content.classList.contains('hidden');
+    content.classList.toggle('hidden', open);
+    btn.textContent = (open ? '▾' : '▴') + ' How the Scare Meter Works';
+  });
+
   document.getElementById('resultsBackBtn').addEventListener('click', ()=>{
     showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
   });
