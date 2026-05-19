@@ -243,12 +243,23 @@ function esc(str) {
   return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function renderCard(movie, score, gore) {
-  const poster   = posterUrl(movie.poster_path);
-  const year     = (movie.release_date||'').slice(0,4);
-  const desc     = descriptor(score);
-  const gorePct  = Math.round((gore / 10) * 100);
-  const goreColor = gore >= 7 ? '#c00000' : gore >= 4 ? '#e67e22' : '#555';
+function renderCard(movie, score, cats) {
+  const poster = posterUrl(movie.poster_path);
+  const year   = (movie.release_date||'').slice(0,4);
+  const desc   = descriptor(score);
+
+  const topCats = Object.entries(cats)
+    .filter(([,v]) => v > 0)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0, 5);
+
+  const catRows = topCats.map(([cat, val]) => `
+    <div class="card-cat-row">
+      <span class="card-cat-name">${CAT_LABELS[cat]||cat}</span>
+      <div class="card-cat-track"><div class="card-cat-fill" style="width:${(val/10)*100}%;background:${desc.color}"></div></div>
+      <span class="card-cat-val">${val.toFixed(1)}</span>
+    </div>`).join('');
+
   return `
     <div class="movie-card" data-id="${movie.id}">
       ${poster ? `<img class="card-poster" src="${poster}" alt="${esc(movie.title)}" loading="lazy" />`
@@ -257,10 +268,7 @@ function renderCard(movie, score, gore) {
         <div class="card-title">${esc(movie.title)}</div>
         ${year ? `<div class="card-year">${year}</div>` : ''}
         <span class="scare-badge ${scareClass(score)}">${desc.icon} ${score}/5</span>
-        <div class="gore-meter">
-          <span class="gore-label">GORE</span>
-          <div class="gore-track"><div class="gore-fill" style="width:${gorePct}%;background:${goreColor}"></div></div>
-        </div>
+        ${topCats.length ? `<div class="card-cats">${catRows}</div>` : ''}
       </div>
     </div>`;
 }
@@ -562,7 +570,7 @@ async function doSearch(query) {
       grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;padding:2rem 0">No films found.</p>';
       return;
     }
-    grid.innerHTML = movies.map(m=>{ const { score, cats } = calcScare(m); return renderCard(m, score, cats.gore); }).join('');
+    grid.innerHTML = movies.map(m=>{ const { score, cats } = calcScare(m); return renderCard(m, score, cats); }).join('');
     grid.querySelectorAll('.movie-card').forEach(c=>{
       c.addEventListener('click',()=>openMovie(+c.dataset.id,'resultsSection'));
     });
@@ -631,7 +639,7 @@ async function loadRecent() {
     if (!movies.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
     list.innerHTML = movies.map(m => {
       const { score, cats } = calcScare(m);
-      return renderCard(m, score, cats.gore);
+      return renderCard(m, score, cats);
     }).join('');
     list.querySelectorAll('.movie-card').forEach(c => {
       c.addEventListener('click', () => openMovie(+c.dataset.id, 'homeSection'));
