@@ -805,6 +805,8 @@ function initCalculator() {
   renderWeightsPanel(null);
   updateCalcScore();
 
+  document.getElementById('calcApplyBtn').addEventListener('click', applyWeightsToSite);
+
   document.getElementById('calcResetBtn').addEventListener('click', () => {
     document.querySelectorAll('.calc-slider').forEach(s => {
       const def = CAT_WEIGHTS[s.dataset.cat] ?? 1.0;
@@ -829,15 +831,29 @@ function initCalculator() {
   });
 }
 
+function applyWeightsToSite() {
+  document.querySelectorAll('.calc-slider').forEach(s => {
+    userWeights[s.dataset.cat] = parseFloat(s.value);
+  });
+  scheduleRerender();
+  const btn = document.getElementById('calcApplyBtn');
+  if (btn) {
+    btn.textContent = '✓ Applied!';
+    btn.classList.add('applied');
+    clearTimeout(btn._resetTimer);
+    btn._resetTimer = setTimeout(() => {
+      btn.textContent = 'Apply to Site';
+      btn.classList.remove('applied');
+    }, 2000);
+  }
+}
+
 function updateCalcScore() {
   const baseCats = hereditaryCats || Object.fromEntries(Object.keys(CAT_WEIGHTS).map(k => [k, 5]));
   let rawScore = 0;
   document.querySelectorAll('.calc-slider').forEach(s => {
-    const w = parseFloat(s.value);
-    userWeights[s.dataset.cat] = w;
-    rawScore += (baseCats[s.dataset.cat] || 0) * w;
+    rawScore += (baseCats[s.dataset.cat] || 0) * parseFloat(s.value);
   });
-  scheduleRerender();
   const exact = Math.max(1, Math.min(5, 1 + (rawScore / 15) * 4));
   const rounded = Math.round(exact);
   const desc = descriptor(rounded);
