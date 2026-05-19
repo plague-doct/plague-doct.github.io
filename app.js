@@ -967,20 +967,20 @@ function renderDiscoverResult() {
 // ── Franchise Library ────────────────────────────────────────────────────────
 
 const FRANCHISES = [
-  { name: 'Texas Chain Saw',         collectionId: 135503 }, // 1974
+  { name: 'Texas Chain Saw',         collectionId: 111751 }, // 1974
   { name: 'Halloween',               collectionId: 91361  }, // 1978
   { name: 'Friday the 13th',         collectionId: 9735   }, // 1980
-  { name: 'Evil Dead',               collectionId: 165    }, // 1981
-  { name: 'A Nightmare on Elm St.',  collectionId: 9736   }, // 1984
-  { name: 'Hellraiser',              collectionId: 5765   }, // 1987
+  { name: 'Evil Dead',               collectionId: 1960   }, // 1981
+  { name: 'A Nightmare on Elm St.',  collectionId: 8581   }, // 1984
+  { name: 'Hellraiser',              collectionId: 8917   }, // 1987
   { name: "Child's Play",            collectionId: 10455  }, // 1988
   { name: 'Scream',                  collectionId: 2602   }, // 1996
   { name: 'Final Destination',       collectionId: 8864   }, // 2000
   { name: 'Saw',                     collectionId: 656    }, // 2004
-  { name: 'Paranormal Activity',     collectionId: 37741  }, // 2007
+  { name: 'Paranormal Activity',     collectionId: 41437  }, // 2007
   { name: 'Insidious',               collectionId: 228446 }, // 2010
   { name: 'The Conjuring',           collectionId: 313086 }, // 2013
-  { name: 'The Purge',               collectionId: 257344 }, // 2013
+  { name: 'The Purge',               collectionId: 256322 }, // 2013
 ];
 
 async function loadFranchiseLibrary() {
