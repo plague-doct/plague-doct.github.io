@@ -967,20 +967,20 @@ function renderDiscoverResult() {
 // ── Franchise Library ────────────────────────────────────────────────────────
 
 const FRANCHISES = [
-  { name: 'Halloween',               collectionId: 91361  },
-  { name: 'Friday the 13th',         collectionId: 9735   },
-  { name: 'A Nightmare on Elm St.',  collectionId: 9736   },
-  { name: 'Scream',                  collectionId: 2602   },
-  { name: 'The Conjuring',           collectionId: 313086 },
-  { name: 'Saw',                     collectionId: 656    },
-  { name: 'Evil Dead',               collectionId: 165    },
-  { name: "Child's Play",            collectionId: 10455  },
-  { name: 'The Purge',               collectionId: 257344 },
-  { name: 'Insidious',               collectionId: 228446 },
-  { name: 'Final Destination',       collectionId: 8864   },
-  { name: 'Texas Chain Saw',         collectionId: 135503 },
-  { name: 'Hellraiser',              collectionId: 5765   },
-  { name: 'Paranormal Activity',     collectionId: 37741  },
+  { name: 'Texas Chain Saw',         collectionId: 135503 }, // 1974
+  { name: 'Halloween',               collectionId: 91361  }, // 1978
+  { name: 'Friday the 13th',         collectionId: 9735   }, // 1980
+  { name: 'Evil Dead',               collectionId: 165    }, // 1981
+  { name: 'A Nightmare on Elm St.',  collectionId: 9736   }, // 1984
+  { name: 'Hellraiser',              collectionId: 5765   }, // 1987
+  { name: "Child's Play",            collectionId: 10455  }, // 1988
+  { name: 'Scream',                  collectionId: 2602   }, // 1996
+  { name: 'Final Destination',       collectionId: 8864   }, // 2000
+  { name: 'Saw',                     collectionId: 656    }, // 2004
+  { name: 'Paranormal Activity',     collectionId: 37741  }, // 2007
+  { name: 'Insidious',               collectionId: 228446 }, // 2010
+  { name: 'The Conjuring',           collectionId: 313086 }, // 2013
+  { name: 'The Purge',               collectionId: 257344 }, // 2013
 ];
 
 async function loadFranchiseLibrary() {
@@ -1048,7 +1048,7 @@ async function openFranchise(collectionId) {
 
     const scored = parts
       .map(p => ({ movie: p, ...calcScare(p) }))
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => (a.movie.release_date || '').localeCompare(b.movie.release_date || ''));
 
     const avg = scored.length ? scored.reduce((s, e) => s + e.score, 0) / scored.length : 0;
     const avgDesc = descriptor(Math.max(1, Math.min(5, Math.round(avg))));
