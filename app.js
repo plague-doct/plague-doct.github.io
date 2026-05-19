@@ -534,6 +534,7 @@ async function openMovie(id, backTarget='homeSection') {
     const { movie, credits, keywords } = await getDetails(id);
     keywordsCache.set(id, keywords);
     const breakdown = calcScare(movie, keywords);
+    scoreCache.set(id, breakdown);
     content.innerHTML = renderDetail(movie, credits, keywords, breakdown, null, null, null, null);
     animateBars();
 
@@ -547,6 +548,7 @@ async function openMovie(id, backTarget='homeSection') {
       if (rtScore === null && rebertScore === null && guardianScore === null && letterboxdScore === null) return;
       if (!document.getElementById('detailContent')) return;
       const updated = calcScare(movie, keywords, rtScore, rebertScore, guardianScore, letterboxdScore);
+      scoreCache.set(id, updated);
       content.innerHTML = renderDetail(movie, credits, keywords, updated, rtScore, rebertScore, guardianScore, letterboxdScore);
       animateBars();
     });
@@ -638,9 +640,10 @@ function showToast(msg) {
   t._timer = setTimeout(()=>t.classList.add('hidden'), 2500);
 }
 
-// ── Keyword cache (shared between thumbnails and detail view) ─────────────────
+// ── Score/keyword caches (shared between thumbnails and detail view) ──────────
 
 const keywordsCache = new Map(); // movieId → keywords[]
+const scoreCache    = new Map(); // movieId → {score, cats} — fully enriched (incl. external reviews)
 
 // ── Recent films ──────────────────────────────────────────────────────────────
 
@@ -652,6 +655,8 @@ function rerenderRecent() {
   const list = document.getElementById('recentList');
   if (!list) return;
   list.innerHTML = recentMovies.map(m => {
+    const cached = scoreCache.get(m.id);
+    if (cached) return renderCard(m, cached.score, cached.cats);
     const kws = keywordsCache.get(m.id) || [];
     const { score, cats } = calcScare(m, kws);
     return renderCard(m, score, cats);
@@ -682,8 +687,10 @@ async function loadRecent() {
     recentMovies = (data.results || []).slice(0, 20);
     if (!recentMovies.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
 
-    // Quick render with text-only scores while keywords load
+    // Quick render — use cached score if available, otherwise text-only
     list.innerHTML = recentMovies.map(m => {
+      const cached = scoreCache.get(m.id);
+      if (cached) return renderCard(m, cached.score, cached.cats);
       const { score, cats } = calcScare(m);
       return renderCard(m, score, cats);
     }).join('');
