@@ -640,6 +640,7 @@ function showToast(msg) {
 // ── Recent films ──────────────────────────────────────────────────────────────
 
 let recentMovies = [];
+let rerenderTimer = null;
 
 function rerenderRecent() {
   if (!recentMovies.length) return;
@@ -652,6 +653,14 @@ function rerenderRecent() {
   list.querySelectorAll('.movie-card').forEach(c => {
     c.addEventListener('click', () => openMovie(+c.dataset.id, 'homeSection'));
   });
+  list.classList.remove('cards-recalculating');
+}
+
+function scheduleRerender() {
+  const list = document.getElementById('recentList');
+  if (list && recentMovies.length) list.classList.add('cards-recalculating');
+  clearTimeout(rerenderTimer);
+  rerenderTimer = setTimeout(rerenderRecent, 350);
 }
 
 async function loadRecent() {
@@ -799,7 +808,7 @@ function updateCalcScore() {
     userWeights[s.dataset.cat] = w;
     rawScore += (baseCats[s.dataset.cat] || 0) * w;
   });
-  rerenderRecent();
+  scheduleRerender();
   const exact = Math.max(1, Math.min(5, 1 + (rawScore / 15) * 4));
   const rounded = Math.round(exact);
   const desc = descriptor(rounded);
@@ -1034,6 +1043,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('calcBackBtn').addEventListener('click', ()=>{
     showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
+    rerenderRecent();
   });
 
   document.getElementById('discoverBtn').addEventListener('click', ()=>{
