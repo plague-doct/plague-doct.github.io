@@ -513,7 +513,7 @@ function bindSuggestions(boxEl, movies, onSelect) {
 
 // ── Sections ──────────────────────────────────────────────────────────────────
 
-const SECTIONS = ['homeSection','resultsSection','movieDetail','compareSection','calculatorSection','discoverSection'];
+const SECTIONS = ['homeSection','resultsSection','movieDetail','compareSection','calculatorSection','discoverSection','franchiseSection'];
 
 function showSection(id) {
   SECTIONS.forEach(s=>document.getElementById(s).classList.toggle('hidden', s!==id));
@@ -964,6 +964,148 @@ function renderDiscoverResult() {
   });
 }
 
+// ── Franchise Library ────────────────────────────────────────────────────────
+
+const FRANCHISES = [
+  { name: 'Halloween',               collectionId: 91361  },
+  { name: 'Friday the 13th',         collectionId: 9735   },
+  { name: 'A Nightmare on Elm St.',  collectionId: 9736   },
+  { name: 'Scream',                  collectionId: 2602   },
+  { name: 'The Conjuring',           collectionId: 313086 },
+  { name: 'Saw',                     collectionId: 656    },
+  { name: 'Evil Dead',               collectionId: 165    },
+  { name: "Child's Play",            collectionId: 10194  },
+  { name: 'The Purge',               collectionId: 257344 },
+  { name: 'Insidious',               collectionId: 228446 },
+  { name: 'Final Destination',       collectionId: 8864   },
+  { name: 'Texas Chain Saw',         collectionId: 135503 },
+  { name: 'Hellraiser',              collectionId: 5765   },
+  { name: 'Paranormal Activity',     collectionId: 37741  },
+];
+
+async function loadFranchiseLibrary() {
+  const content = document.getElementById('franchiseContent');
+  const titleEl = document.getElementById('franchiseSectionTitle');
+  titleEl.textContent = 'Franchise Library';
+
+  content.innerHTML = `<div class="franchise-library-grid">${
+    FRANCHISES.map((f, i) => `
+      <div class="franchise-tile" id="ftile-${i}" data-collection="${f.collectionId}">
+        <div class="franchise-tile-img-wrap">
+          <div class="franchise-tile-placeholder"></div>
+        </div>
+        <div class="franchise-tile-body">
+          <div class="franchise-tile-name">${esc(f.name)}</div>
+          <div class="franchise-tile-meta" id="ftile-meta-${i}">Loading…</div>
+        </div>
+      </div>`).join('')
+  }</div>`;
+
+  content.querySelectorAll('.franchise-tile').forEach(tile => {
+    tile.addEventListener('click', () => openFranchise(+tile.dataset.collection));
+  });
+
+  FRANCHISES.forEach(async (f, i) => {
+    try {
+      const col = await tmdb(`/collection/${f.collectionId}`);
+      const parts = (col.parts || []).filter(p => p.release_date);
+      const scores = parts.map(p => calcScare(p).score);
+      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      const desc = descriptor(Math.max(1, Math.min(5, Math.round(avg))));
+
+      const tile = document.getElementById(`ftile-${i}`);
+      if (!tile) return;
+
+      const imgWrap = tile.querySelector('.franchise-tile-img-wrap');
+      imgWrap.innerHTML = col.poster_path
+        ? `<img class="franchise-tile-poster" src="${posterUrl(col.poster_path, 'w342')}" alt="${esc(f.name)}" />`
+        : `<div class="franchise-tile-no-poster">🎬</div>`;
+
+      const meta = document.getElementById(`ftile-meta-${i}`);
+      if (meta) meta.innerHTML = `
+        <span class="ftile-count">${parts.length} films</span>
+        <span class="ftile-score" style="color:${desc.color}">${scareImg(desc.icon)} ${avg.toFixed(1)}</span>`;
+    } catch {
+      const meta = document.getElementById(`ftile-meta-${i}`);
+      if (meta) meta.textContent = 'Unavailable';
+    }
+  });
+}
+
+async function openFranchise(collectionId) {
+  const content = document.getElementById('franchiseContent');
+  const titleEl = document.getElementById('franchiseSectionTitle');
+  content.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+
+  try {
+    const col = await tmdb(`/collection/${collectionId}`);
+    const franchise = FRANCHISES.find(f => f.collectionId === collectionId);
+    titleEl.textContent = franchise ? franchise.name : col.name;
+
+    const parts = (col.parts || [])
+      .filter(p => p.release_date)
+      .sort((a, b) => a.release_date.localeCompare(b.release_date));
+
+    const scored = parts
+      .map(p => ({ movie: p, ...calcScare(p) }))
+      .sort((a, b) => b.score - a.score);
+
+    const avg = scored.length ? scored.reduce((s, e) => s + e.score, 0) / scored.length : 0;
+    const avgDesc = descriptor(Math.max(1, Math.min(5, Math.round(avg))));
+
+    const rows = scored.map((entry, i) => {
+      const { movie, score, cats } = entry;
+      const desc = descriptor(score);
+      const poster = posterUrl(movie.poster_path, 'w185');
+      const year = (movie.release_date || '').slice(0, 4);
+
+      const topCats = Object.entries(cats)
+        .filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]).slice(0, 3)
+        .map(([cat, val]) => `
+          <div class="fr-cat-row">
+            <span class="fr-cat-name">${CAT_LABELS[cat] || cat}</span>
+            <div class="fr-cat-track"><div class="fr-cat-fill" style="width:${(val/10)*100}%;background:${desc.color}"></div></div>
+            <span class="fr-cat-val">${val.toFixed(1)}</span>
+          </div>`).join('');
+
+      return `
+        <div class="franchise-film-row" data-id="${movie.id}">
+          <div class="fr-rank" style="color:${desc.color}">#${i + 1}</div>
+          ${poster
+            ? `<img class="fr-poster" src="${poster}" alt="${esc(movie.title)}" />`
+            : `<div class="fr-no-poster">🎬</div>`}
+          <div class="fr-info">
+            <div class="fr-title">${esc(movie.title)}${year ? ` <span class="fr-year">(${year})</span>` : ''}</div>
+            <div class="fr-score-row">
+              ${scareImg(desc.icon)}
+              <span class="fr-score" style="color:${desc.color}">${score}/5</span>
+              <span class="fr-desc-label" style="color:${desc.color}">${desc.label}</span>
+            </div>
+            ${topCats ? `<div class="fr-cats">${topCats}</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+
+    content.innerHTML = `
+      <button class="back-btn fr-back" id="frBackToLib">← All Franchises</button>
+      <div class="fr-summary">
+        ${scareImg(avgDesc.icon)} Franchise avg
+        <strong style="color:${avgDesc.color}">${avg.toFixed(1)}/5</strong>
+        <span class="fr-film-count">· ${parts.length} films</span>
+      </div>
+      <div class="franchise-films-list">${rows}</div>`;
+
+    document.getElementById('frBackToLib').addEventListener('click', loadFranchiseLibrary);
+    content.querySelectorAll('.franchise-film-row').forEach(row => {
+      row.addEventListener('click', () => openMovie(+row.dataset.id, 'franchiseSection'));
+    });
+
+  } catch (e) {
+    content.innerHTML = '<p style="color:var(--text-muted);padding:2rem">Failed to load franchise.</p>';
+    console.error(e);
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1051,6 +1193,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('discoverBackBtn').addEventListener('click', ()=>{
+    showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
+  });
+
+  document.getElementById('franchiseBtn').addEventListener('click', ()=>{
+    showSection('franchiseSection'); window.scrollTo({top:0,behavior:'smooth'});
+    loadFranchiseLibrary();
+  });
+
+  document.getElementById('franchiseBackBtn').addEventListener('click', ()=>{
     showSection('homeSection'); window.scrollTo({top:0,behavior:'smooth'});
   });
 
