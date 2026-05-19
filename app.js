@@ -55,6 +55,8 @@ const CAT_WEIGHTS = {
   gore:1.4, demonic:1.3, slasher:1.2, supernatural:1.1,
   creature:1.0, occult:1.0, psychological:0.9, tension:0.7,
 };
+
+let userWeights = { ...CAT_WEIGHTS };
 const CAT_LABELS = {
   gore:'Gore', supernatural:'Supernatural', psychological:'Psychological',
   slasher:'Slasher', demonic:'Demonic', creature:'Creature', tension:'Tension', occult:'Occult',
@@ -90,7 +92,7 @@ function calcScare(movie, keywords = [], rtScore = null, rebertScore = null, gua
 
   let rawScore = 0;
   for (const [cat, val] of Object.entries(cats)) {
-    rawScore += val * (CAT_WEIGHTS[cat] || 1);
+    rawScore += val * (userWeights[cat] ?? CAT_WEIGHTS[cat] ?? 1);
   }
 
   if (rtScore !== null)         rawScore += (rtScore / 100) * 3;
@@ -637,6 +639,21 @@ function showToast(msg) {
 
 // ── Recent films ──────────────────────────────────────────────────────────────
 
+let recentMovies = [];
+
+function rerenderRecent() {
+  if (!recentMovies.length) return;
+  const list = document.getElementById('recentList');
+  if (!list) return;
+  list.innerHTML = recentMovies.map(m => {
+    const { score, cats } = calcScare(m);
+    return renderCard(m, score, cats);
+  }).join('');
+  list.querySelectorAll('.movie-card').forEach(c => {
+    c.addEventListener('click', () => openMovie(+c.dataset.id, 'homeSection'));
+  });
+}
+
 async function loadRecent() {
   const list = document.getElementById('recentList');
   if (!list) return;
@@ -647,9 +664,9 @@ async function loadRecent() {
       'vote_count.gte': 50,
       page: 1,
     });
-    const movies = (data.results || []).slice(0, 20);
-    if (!movies.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
-    list.innerHTML = movies.map(m => {
+    recentMovies = (data.results || []).slice(0, 20);
+    if (!recentMovies.length) { list.innerHTML = '<div class="sidebar-loading">None found</div>'; return; }
+    list.innerHTML = recentMovies.map(m => {
       const { score, cats } = calcScare(m);
       return renderCard(m, score, cats);
     }).join('');
@@ -778,8 +795,11 @@ function updateCalcScore() {
   const baseCats = hereditaryCats || Object.fromEntries(Object.keys(CAT_WEIGHTS).map(k => [k, 5]));
   let rawScore = 0;
   document.querySelectorAll('.calc-slider').forEach(s => {
-    rawScore += (baseCats[s.dataset.cat] || 0) * parseFloat(s.value);
+    const w = parseFloat(s.value);
+    userWeights[s.dataset.cat] = w;
+    rawScore += (baseCats[s.dataset.cat] || 0) * w;
   });
+  rerenderRecent();
   const exact = Math.max(1, Math.min(5, 1 + (rawScore / 15) * 4));
   const rounded = Math.round(exact);
   const desc = descriptor(rounded);
