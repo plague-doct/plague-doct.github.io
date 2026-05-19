@@ -1168,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.getElementById('backBtn').addEventListener('click', ()=>{
     showSection(detailBackTarget); window.scrollTo({top:0,behavior:'smooth'});
+    if (detailBackTarget === 'homeSection') rerenderRecent();
   });
 
   document.getElementById('compareLaunchBtn').addEventListener('click', ()=>{
