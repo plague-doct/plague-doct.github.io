@@ -688,55 +688,65 @@ function fillSliders(cats) {
   });
 }
 
+function renderWeightsPanel(hereditaryCatsData) {
+  const weightsEl = document.getElementById('calcWeightsList');
+  if (!weightsEl) return;
+  if (!hereditaryCatsData) {
+    weightsEl.innerHTML = '<div class="calc-example-loading">Loading…</div>';
+    return;
+  }
+  weightsEl.innerHTML = Object.entries(CAT_WEIGHTS)
+    .sort((a,b) => b[1] - a[1])
+    .map(([cat]) => {
+      const intensity = hereditaryCatsData[cat] || 0;
+      return `
+        <div class="calc-weight-row">
+          <span class="calc-weight-name">${CAT_LABELS[cat] || cat}</span>
+          <div class="calc-weight-bar-track">
+            <div class="calc-weight-bar-fill" style="width:${(intensity / 10) * 100}%"></div>
+          </div>
+          <span class="calc-weight-val">${intensity.toFixed(1)}</span>
+        </div>`;
+    }).join('');
+}
+
 function initCalculator() {
   if (calcInitialized) return;
   calcInitialized = true;
 
   const slidersEl = document.getElementById('calcSliders');
-  const weightsEl = document.getElementById('calcWeightsList');
 
-  slidersEl.innerHTML = Object.entries(CAT_LABELS).map(([cat, label]) => `
-    <div class="calc-slider-row">
-      <div class="calc-slider-header">
-        <span class="calc-slider-label">${label}</span>
-        <span class="calc-slider-val" id="calcVal-${cat}">5</span>
-      </div>
-      <input type="range" class="calc-slider" data-cat="${cat}" min="0" max="10" step="0.5" value="5" />
-    </div>`).join('');
-
-  weightsEl.innerHTML = Object.entries(CAT_WEIGHTS)
-    .sort((a,b) => b[1] - a[1])
-    .map(([cat, w]) => `
-      <div class="calc-weight-row">
-        <span class="calc-weight-name">${CAT_LABELS[cat] || cat}</span>
-        <div class="calc-weight-bar-track">
-          <div class="calc-weight-bar-fill" style="width:${(w / 1.4) * 100}%"></div>
+  slidersEl.innerHTML = Object.entries(CAT_LABELS).map(([cat, label]) => {
+    const def = CAT_WEIGHTS[cat] ?? 1.0;
+    return `
+      <div class="calc-slider-row">
+        <div class="calc-slider-header">
+          <span class="calc-slider-label">${label}</span>
+          <span class="calc-slider-val" id="calcVal-${cat}">×${def.toFixed(1)}</span>
         </div>
-        <span class="calc-weight-val">×${w}</span>
-      </div>`).join('');
+        <input type="range" class="calc-slider" data-cat="${cat}" min="0" max="3" step="0.1" value="${def}" />
+      </div>`;
+  }).join('');
 
   slidersEl.querySelectorAll('.calc-slider').forEach(slider => {
     slider.addEventListener('input', () => {
-      document.getElementById(`calcVal-${slider.dataset.cat}`).textContent = parseFloat(slider.value).toFixed(1);
+      document.getElementById(`calcVal-${slider.dataset.cat}`).textContent = `×${parseFloat(slider.value).toFixed(1)}`;
       updateCalcScore();
     });
   });
 
+  renderWeightsPanel(null);
   updateCalcScore();
 
   document.getElementById('calcResetBtn').addEventListener('click', () => {
-    if (hereditaryCats) {
-      fillSliders(hereditaryCats);
-    } else {
-      document.querySelectorAll('.calc-slider').forEach(s => {
-        s.value = 5;
-        document.getElementById(`calcVal-${s.dataset.cat}`).textContent = '5.0';
-      });
-    }
+    document.querySelectorAll('.calc-slider').forEach(s => {
+      const def = CAT_WEIGHTS[s.dataset.cat] ?? 1.0;
+      s.value = def;
+      document.getElementById(`calcVal-${s.dataset.cat}`).textContent = `×${def.toFixed(1)}`;
+    });
     updateCalcScore();
   });
 
-  // Show placeholder while fetching
   const wrap = document.getElementById('calcExampleWrap');
   if (wrap) wrap.innerHTML = '<div class="calc-example-loading">Loading example film…</div>';
 
@@ -744,17 +754,19 @@ function initCalculator() {
     const { cats } = calcScare(movie, keywords);
     hereditaryCats = cats;
     renderExampleCard(movie, false);
-    fillSliders(cats);
+    renderWeightsPanel(cats);
     updateCalcScore();
   }).catch(() => {
     if (wrap) wrap.innerHTML = '';
+    renderWeightsPanel({});
   });
 }
 
 function updateCalcScore() {
+  const baseCats = hereditaryCats || Object.fromEntries(Object.keys(CAT_WEIGHTS).map(k => [k, 5]));
   let rawScore = 0;
   document.querySelectorAll('.calc-slider').forEach(s => {
-    rawScore += parseFloat(s.value) * (CAT_WEIGHTS[s.dataset.cat] || 1);
+    rawScore += (baseCats[s.dataset.cat] || 0) * parseFloat(s.value);
   });
   const exact = Math.max(1, Math.min(5, 1 + (rawScore / 15) * 4));
   const rounded = Math.round(exact);
