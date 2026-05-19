@@ -974,7 +974,7 @@ const FRANCHISES = [
   { name: 'The Conjuring',           collectionId: 313086 },
   { name: 'Saw',                     collectionId: 656    },
   { name: 'Evil Dead',               collectionId: 165    },
-  { name: "Child's Play",            collectionId: 10194  },
+  { name: "Child's Play",            collectionId: 10455  },
   { name: 'The Purge',               collectionId: 257344 },
   { name: 'Insidious',               collectionId: 228446 },
   { name: 'Final Destination',       collectionId: 8864   },
