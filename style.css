@@ -1078,7 +1078,119 @@ footer a:hover { text-decoration: underline; }
   color: var(--text-muted);
   font-size: 0.92rem;
   line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+/* ── Example film card ── */
+.calc-example-wrap {
   margin-bottom: 2rem;
+}
+
+.calc-example-loading {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 0.5rem 0;
+}
+
+.calc-example-card {
+  display: flex;
+  gap: 1.4rem;
+  align-items: flex-start;
+  background: var(--surface);
+  border: 2px solid var(--red-dark);
+  border-radius: var(--radius);
+  padding: 1.2rem 1.4rem;
+}
+
+.calc-example-poster {
+  width: 80px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: block;
+  box-shadow: 4px 4px 0 var(--red-dark);
+}
+
+.calc-example-poster-empty {
+  width: 80px;
+  height: 120px;
+  flex-shrink: 0;
+  background: var(--surface2);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+}
+
+.calc-example-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.calc-example-eyebrow {
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  letter-spacing: 3px;
+  color: var(--red);
+  text-transform: uppercase;
+  margin-bottom: 0.3rem;
+}
+
+.calc-example-title {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  letter-spacing: 1px;
+  color: var(--text);
+  line-height: 1.1;
+  margin-bottom: 0.75rem;
+}
+
+.calc-example-year {
+  color: var(--text-muted);
+  font-size: 1rem;
+}
+
+.calc-example-score-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.calc-example-score {
+  font-family: var(--font-heading);
+  font-size: 3rem;
+  line-height: 1;
+  color: var(--red);
+  transition: color 0.2s;
+}
+
+.calc-example-desc {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  transition: color 0.2s;
+}
+
+.calc-example-bar-track {
+  height: 5px;
+  background: var(--border);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 0.6rem;
+}
+
+.calc-example-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.3s ease, background 0.2s;
+}
+
+.calc-example-note {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
 }
 
 .calc-layout {

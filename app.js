@@ -651,14 +651,49 @@ async function loadRecent() {
 
 // ── Scare Calculator ──────────────────────────────────────────────────────────
 
+const HEREDITARY_ID = 493922;
+let hereditaryCats  = null;
 let calcInitialized = false;
+
+function renderExampleCard(movie, loading = false) {
+  const wrap   = document.getElementById('calcExampleWrap');
+  if (!wrap) return;
+  const poster = posterUrl(movie.poster_path, 'w185');
+  const year   = (movie.release_date || '').slice(0, 4);
+  wrap.innerHTML = `
+    <div class="calc-example-card">
+      ${poster ? `<img class="calc-example-poster" src="${poster}" alt="${esc(movie.title)}" />`
+               : `<div class="calc-example-poster-empty">🎬</div>`}
+      <div class="calc-example-info">
+        <div class="calc-example-eyebrow">Live Example</div>
+        <div class="calc-example-title">${esc(movie.title)}${year ? ` <span class="calc-example-year">(${year})</span>` : ''}</div>
+        <div class="calc-example-score-row">
+          <div class="calc-example-score" id="calcExScore">${loading ? '…' : '—'}</div>
+          <div class="calc-example-desc"  id="calcExDesc">${loading ? 'Loading…' : '—'}</div>
+        </div>
+        <div class="calc-example-bar-track">
+          <div class="calc-example-bar-fill" id="calcExBar" style="width:0%"></div>
+        </div>
+        <div class="calc-example-note">Adjust the sliders to see how the score changes</div>
+      </div>
+    </div>`;
+}
+
+function fillSliders(cats) {
+  Object.entries(cats).forEach(([cat, val]) => {
+    const slider = document.querySelector(`.calc-slider[data-cat="${cat}"]`);
+    const valEl  = document.getElementById(`calcVal-${cat}`);
+    if (slider) slider.value = val;
+    if (valEl)  valEl.textContent = parseFloat(val).toFixed(1);
+  });
+}
 
 function initCalculator() {
   if (calcInitialized) return;
   calcInitialized = true;
 
-  const slidersEl  = document.getElementById('calcSliders');
-  const weightsEl  = document.getElementById('calcWeightsList');
+  const slidersEl = document.getElementById('calcSliders');
+  const weightsEl = document.getElementById('calcWeightsList');
 
   slidersEl.innerHTML = Object.entries(CAT_LABELS).map(([cat, label]) => `
     <div class="calc-slider-row">
@@ -670,19 +705,19 @@ function initCalculator() {
     </div>`).join('');
 
   weightsEl.innerHTML = Object.entries(CAT_WEIGHTS)
-    .sort((a,b)=>b[1]-a[1])
-    .map(([cat,w])=>`
+    .sort((a,b) => b[1] - a[1])
+    .map(([cat, w]) => `
       <div class="calc-weight-row">
-        <span class="calc-weight-name">${CAT_LABELS[cat]||cat}</span>
+        <span class="calc-weight-name">${CAT_LABELS[cat] || cat}</span>
         <div class="calc-weight-bar-track">
-          <div class="calc-weight-bar-fill" style="width:${(w/1.4)*100}%"></div>
+          <div class="calc-weight-bar-fill" style="width:${(w / 1.4) * 100}%"></div>
         </div>
         <span class="calc-weight-val">×${w}</span>
       </div>`).join('');
 
   slidersEl.querySelectorAll('.calc-slider').forEach(slider => {
     slider.addEventListener('input', () => {
-      document.getElementById(`calcVal-${slider.dataset.cat}`).textContent = slider.value;
+      document.getElementById(`calcVal-${slider.dataset.cat}`).textContent = parseFloat(slider.value).toFixed(1);
       updateCalcScore();
     });
   });
@@ -690,11 +725,29 @@ function initCalculator() {
   updateCalcScore();
 
   document.getElementById('calcResetBtn').addEventListener('click', () => {
-    document.querySelectorAll('.calc-slider').forEach(s => {
-      s.value = 5;
-      document.getElementById(`calcVal-${s.dataset.cat}`).textContent = '5';
-    });
+    if (hereditaryCats) {
+      fillSliders(hereditaryCats);
+    } else {
+      document.querySelectorAll('.calc-slider').forEach(s => {
+        s.value = 5;
+        document.getElementById(`calcVal-${s.dataset.cat}`).textContent = '5.0';
+      });
+    }
     updateCalcScore();
+  });
+
+  // Show placeholder while fetching
+  const wrap = document.getElementById('calcExampleWrap');
+  if (wrap) wrap.innerHTML = '<div class="calc-example-loading">Loading example film…</div>';
+
+  getDetails(HEREDITARY_ID).then(({ movie, keywords }) => {
+    const { cats } = calcScare(movie, keywords);
+    hereditaryCats = cats;
+    renderExampleCard(movie, false);
+    fillSliders(cats);
+    updateCalcScore();
+  }).catch(() => {
+    if (wrap) wrap.innerHTML = '';
   });
 }
 
@@ -714,6 +767,13 @@ function updateCalcScore() {
   if (scoreEl) { scoreEl.textContent = exact.toFixed(1); scoreEl.style.color = desc.color; }
   if (descEl)  { descEl.textContent = `${desc.icon} ${desc.label}`; descEl.style.color = desc.color; }
   if (barEl)   { barEl.style.width = `${(exact/5)*100}%`; barEl.style.background = desc.color; }
+
+  const exScore = document.getElementById('calcExScore');
+  const exDesc  = document.getElementById('calcExDesc');
+  const exBar   = document.getElementById('calcExBar');
+  if (exScore) { exScore.textContent = exact.toFixed(1); exScore.style.color = desc.color; }
+  if (exDesc)  { exDesc.textContent = `${desc.icon} ${desc.label}`; exDesc.style.color = desc.color; }
+  if (exBar)   { exBar.style.width = `${(exact/5)*100}%`; exBar.style.background = desc.color; }
 }
 
 // ── Discover ──────────────────────────────────────────────────────────────────
