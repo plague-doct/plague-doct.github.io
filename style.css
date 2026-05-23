@@ -242,6 +242,17 @@ main {
 #compareSearchBtn:hover { background: var(--red-bright); border-color: var(--red-bright); }
 #compareSearchBtn:active { transform: scale(0.97); }
 
+.accuracy-disclaimer {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.3px;
+  margin: 1rem auto 0;
+  max-width: 860px;
+  opacity: 0.7;
+  text-align: center;
+  width: 100%;
+}
+
 /* ── How it works ─────────────────────────────────────────────── */
 .how-it-works {
   width: 100%;
